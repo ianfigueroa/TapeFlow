@@ -76,6 +76,9 @@ export const AlgoSignals = memo(function AlgoSignals({
     }
   }, [symbol]);
   
+  // Track recent volume at each price level (for spoof detection)
+  const recentVolumeRef = useRef<Map<number, { volume: number; timestamp: number }>>(new Map());
+  
   const generateSignalId = useCallback(() => {
     signalIdCounterRef.current++;
     return `signal-${Date.now()}-${signalIdCounterRef.current}`;
@@ -85,12 +88,20 @@ export const AlgoSignals = memo(function AlgoSignals({
     setSignals(prev => [{ ...signal, id: generateSignalId(), timestamp: Date.now() }, ...prev].slice(0, maxSignals));
   }, [generateSignalId, maxSignals]);
   
-  // Whale detection via trade subscription
+  // Whale detection via trade subscription + track volume per price for spoof detection
   useEffect(() => {
     const upperSymbol = symbol.toUpperCase();
     const unsubscribe = subscribeToTrades((trade: Trade) => {
       if (trade.symbol.toUpperCase() !== upperSymbol) return;
       currentPriceRef.current = trade.price;
+      
+      // Track volume at this price level (for spoof vs filled detection)
+      const now = Date.now();
+      const existing = recentVolumeRef.current.get(trade.price);
+      recentVolumeRef.current.set(trade.price, {
+        volume: (existing?.volume || 0) + trade.volume,
+        timestamp: now,
+      });
       
       const tradeValue = trade.price * trade.volume;
       const { whaleMin } = getThresholds();
@@ -113,6 +124,14 @@ export const AlgoSignals = memo(function AlgoSignals({
   // Velocity detection (1s interval)
   useEffect(() => {
     const interval = setInterval(() => {
+      // Clean up stale volume data (older than 2s)
+      const now = Date.now();
+      recentVolumeRef.current.forEach((data, price) => {
+        if (now - data.timestamp > 2000) {
+          recentVolumeRef.current.delete(price);
+        }
+      });
+      
       const rateStats = getTradeRate(symbol);
       setTradesPerSec(rateStats.current);
       setAvgTradesPerSec(rateStats.avg);
@@ -191,19 +210,25 @@ export const AlgoSignals = memo(function AlgoSignals({
         }
       });
       
-      // Spoof detection
+      // Spoof detection - only flag if order was cancelled, not filled
       if (prevOrderBookRef.current) {
         const { spoofMin } = getThresholds();
         
         prevOrderBookRef.current.bids.forEach((prevLevel, price) => {
           const currentLevel = currentBids.get(price);
           const spoofValue = prevLevel.size * price;
+          const sizeDrop = prevLevel.size - (currentLevel?.size || 0);
+          const tradedVolume = recentVolumeRef.current.get(price)?.volume || 0;
+          
+          // Only spoof if <10% was actually traded (rest was cancelled)
+          const wasFilled = tradedVolume >= sizeDrop * 0.1;
+          
           if (prevLevel.size > avgBidSize * 3 && spoofValue >= spoofMin &&
               (!currentLevel || currentLevel.size < prevLevel.size * 0.3) &&
-              now - prevLevel.timestamp < 2000) {
+              now - prevLevel.timestamp < 2000 && !wasFilled) {
             addSignal({
               type: 'spoof', symbol,
-              message: `${formatDollarCompact(spoofValue)} bid @ ${formatPrice(price, 'crypto')} vanished`,
+              message: `${formatDollarCompact(spoofValue)} Bid Cancelled @ ${formatPrice(price, 'crypto')} (No Fill)`,
               value: spoofValue, side: 'buy', price,
             });
           }
@@ -212,12 +237,18 @@ export const AlgoSignals = memo(function AlgoSignals({
         prevOrderBookRef.current.asks.forEach((prevLevel, price) => {
           const currentLevel = currentAsks.get(price);
           const spoofValue = prevLevel.size * price;
+          const sizeDrop = prevLevel.size - (currentLevel?.size || 0);
+          const tradedVolume = recentVolumeRef.current.get(price)?.volume || 0;
+          
+          // Only spoof if <10% was actually traded (rest was cancelled)
+          const wasFilled = tradedVolume >= sizeDrop * 0.1;
+          
           if (prevLevel.size > avgAskSize * 3 && spoofValue >= spoofMin &&
               (!currentLevel || currentLevel.size < prevLevel.size * 0.3) &&
-              now - prevLevel.timestamp < 2000) {
+              now - prevLevel.timestamp < 2000 && !wasFilled) {
             addSignal({
               type: 'spoof', symbol,
-              message: `${formatDollarCompact(spoofValue)} ask @ ${formatPrice(price, 'crypto')} vanished`,
+              message: `${formatDollarCompact(spoofValue)} Ask Cancelled @ ${formatPrice(price, 'crypto')} (No Fill)`,
               value: spoofValue, side: 'sell', price,
             });
           }
