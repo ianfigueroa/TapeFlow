@@ -155,7 +155,7 @@ export function OrderBook({
     return (
       <div className="flex items-center justify-center h-64 text-gray-600 bg-black">
         <div className="text-center font-mono">
-          <div className="text-3xl mb-2">í³Š</div>
+          <div className="text-3xl mb-2">...</div>
           <p className="text-sm">&gt; Waiting for L2 data...</p>
         </div>
       </div>
