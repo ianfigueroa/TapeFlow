@@ -1,7 +1,9 @@
 #include <iostream>
 #include <chrono>
 #include <iomanip>
+#include <thread>
 #include "orderbook.hpp"
+#include "simulator.hpp"
 
 using namespace hyperion;
 
@@ -11,6 +13,41 @@ void printBook(const OrderBook& book) {
     std::cout << "Best Ask: " << std::fixed << std::setprecision(2) << book.getBestAsk() << "\n";
     std::cout << "Spread:   " << std::fixed << std::setprecision(2) << book.getSpread() << "\n";
     std::cout << "Trades:   " << book.getTradeCount() << "\n";
+}
+
+void runBenchmark() {
+    std::cout << "\n========================================\n";
+    std::cout << "  BENCHMARK: 1M Orders/Second Target\n";
+    std::cout << "========================================\n\n";
+    
+    OrderBook book("BTCUSDT");
+    MarketSimulator simulator(book, 92000.0);
+    
+    // Start simulation at 1M orders/sec target
+    simulator.start(1000000);
+    
+    // Run for 5 seconds, print stats every second
+    for (int i = 0; i < 5; ++i) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        const auto& stats = simulator.getStats();
+        std::cout << "[" << (i + 1) << "s] "
+                  << "Orders: " << std::setw(10) << stats.ordersGenerated.load()
+                  << " | OPS: " << std::setw(10) << std::fixed << std::setprecision(0) << stats.ordersPerSecond.load()
+                  << " | Price: $" << std::setprecision(2) << stats.currentPrice.load()
+                  << " | Trades: " << stats.tradesExecuted.load()
+                  << "\n";
+    }
+    
+    simulator.stop();
+    
+    const auto& stats = simulator.getStats();
+    std::cout << "\n--- Final Stats ---\n";
+    std::cout << "Total Orders:  " << stats.ordersGenerated.load() << "\n";
+    std::cout << "Total Trades:  " << stats.tradesExecuted.load() << "\n";
+    std::cout << "Avg OPS:       " << std::fixed << std::setprecision(0) << stats.ordersPerSecond.load() << "\n";
+    std::cout << "Price Range:   $" << std::setprecision(2) << stats.lowPrice.load() 
+              << " - $" << stats.highPrice.load() << "\n";
 }
 
 int main() {
@@ -56,6 +93,9 @@ int main() {
     printBook(book);
     
     std::cout << "\nOrder Book test complete.\n";
+    
+    // Run high-frequency benchmark
+    runBenchmark();
     
     return 0;
 }
