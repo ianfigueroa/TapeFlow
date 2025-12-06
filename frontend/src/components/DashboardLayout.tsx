@@ -88,22 +88,43 @@ export function DashboardLayout() {
   }, []);
 
   const { isConnected, connectionError, reconnect } = useWebSocket();
+  
+  // Get store actions for injecting simulation data
+  const disconnect = useMarketStore((state) => state.disconnect);
+  const connect = useMarketStore((state) => state.connect);
+  const handleTrade = useMarketStore((state) => state._handleTrade);
+  const handleOrderBook = useMarketStore((state) => state._handleOrderBook);
 
   // Handle mode switching between Live and Simulation
   const handleModeChange = useCallback(async (newMode: DataMode) => {
     if (newMode === dataMode) return;
     
     if (newMode === 'SIM') {
+      // Disconnect from Live WebSocket
+      disconnect();
+      
       // Switch to simulation mode
       const adapter = new SimulationAdapter('ws://localhost:9001');
       try {
         await adapter.connect();
+        
+        // Wire up callbacks to inject simulation data into store
+        adapter.onTrade((trade) => {
+          handleTrade(trade);
+        });
+        
+        adapter.onOrderBook((orderBook) => {
+          handleOrderBook(orderBook);
+        });
+        
         simAdapterRef.current = adapter;
         setSimConnected(true);
         setDataMode('SIM');
       } catch (error) {
         console.error('Failed to connect to simulation engine:', error);
         alert('Failed to connect to Hyperion Engine. Make sure it\'s running on port 9001.');
+        // Reconnect to Live if SIM fails
+        connect();
       }
     } else {
       // Switch back to live mode
@@ -113,8 +134,10 @@ export function DashboardLayout() {
       }
       setSimConnected(false);
       setDataMode('LIVE');
+      // Reconnect to Live WebSocket
+      connect();
     }
-  }, [dataMode]);
+  }, [dataMode, disconnect, connect, handleTrade, handleOrderBook]);
 
   const symbols = useMarketStore((state) => state.symbols);
   const tabs = useMarketStore((state) => state.tabs);
