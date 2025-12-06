@@ -36,3 +36,7 @@ frontend/.vite/
 
 # Testing
 coverage/
+
+# Personal
+.notes
+.prep
