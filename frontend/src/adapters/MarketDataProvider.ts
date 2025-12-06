@@ -152,17 +152,39 @@ export class SimulationAdapter implements MarketDataProvider {
       
       if (telemetry.type !== 'telemetry') return;
       
-      // Convert to Trade (synthetic from price changes)
-      const trade: Trade = {
-        id: `sim-${++this.lastTradeId}`,
-        symbol: telemetry.symbol,
-        assetType: 'crypto',
-        timestamp: telemetry.timestamp,
-        price: telemetry.price,
-        volume: Math.random() * 2, // Synthetic volume
-        side: Math.random() > 0.5 ? 'buy' : 'sell',
-      };
-      this.notifyTrade(trade);
+      // Generate burst of trades to simulate high-frequency flow
+      // Engine runs at ~960K orders/sec, we emit 10-30 trades per tick (50ms)
+      // This gives ~200-600 trades/sec on the frontend (realistic display rate)
+      const tradesPerTick = 10 + Math.floor(Math.random() * 20);
+      const priceVariance = telemetry.spread * 0.5; // Trade prices vary within spread
+      
+      for (let i = 0; i < tradesPerTick; i++) {
+        const isBuy = Math.random() > 0.48; // Slight buy bias for uptrend
+        const priceOffset = (Math.random() - 0.5) * priceVariance;
+        const tradePrice = telemetry.price + priceOffset;
+        
+        // Realistic volume distribution (mostly small, occasional large)
+        const volumeRand = Math.random();
+        let volume: number;
+        if (volumeRand > 0.99) {
+          volume = 1 + Math.random() * 5; // Whale: 1-6 BTC (1%)
+        } else if (volumeRand > 0.9) {
+          volume = 0.1 + Math.random() * 0.9; // Large: 0.1-1 BTC (9%)
+        } else {
+          volume = 0.001 + Math.random() * 0.1; // Normal: 0.001-0.1 BTC (90%)
+        }
+        
+        const trade: Trade = {
+          id: `sim-${++this.lastTradeId}`,
+          symbol: telemetry.symbol,
+          assetType: 'crypto',
+          timestamp: telemetry.timestamp + i, // Stagger timestamps
+          price: Math.round(tradePrice * 100) / 100,
+          volume: Math.round(volume * 100000) / 100000,
+          side: isBuy ? 'buy' : 'sell',
+        };
+        this.notifyTrade(trade);
+      }
       
       // Convert to OrderBook
       const spread = telemetry.bestAsk - telemetry.bestBid;
