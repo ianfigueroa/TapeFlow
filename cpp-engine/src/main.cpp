@@ -2,10 +2,19 @@
 #include <chrono>
 #include <iomanip>
 #include <thread>
+#include <csignal>
 #include "orderbook.hpp"
 #include "simulator.hpp"
+#include "telemetry.hpp"
 
 using namespace hyperion;
+
+// Global flag for graceful shutdown
+std::atomic<bool> g_running{true};
+
+void signalHandler(int) {
+    g_running = false;
+}
 
 void printBook(const OrderBook& book) {
     std::cout << "\n--- Order Book ---\n";
@@ -48,6 +57,48 @@ void runBenchmark() {
     std::cout << "Avg OPS:       " << std::fixed << std::setprecision(0) << stats.ordersPerSecond.load() << "\n";
     std::cout << "Price Range:   $" << std::setprecision(2) << stats.lowPrice.load() 
               << " - $" << stats.highPrice.load() << "\n";
+}
+
+void runTelemetryServer() {
+    std::cout << "\n========================================\n";
+    std::cout << "  TELEMETRY SERVER MODE\n";
+    std::cout << "  WebSocket: ws://localhost:9001\n";
+    std::cout << "========================================\n\n";
+    
+    std::signal(SIGINT, signalHandler);
+    
+    OrderBook book("BTCUSDT");
+    MarketSimulator simulator(book, 92000.0);
+    TelemetryServer telemetry(9001);
+    
+    // Start all components
+    simulator.start(500000); // 500k orders/sec for demo
+    
+    if (!telemetry.start(book, simulator)) {
+        std::cerr << "Failed to start telemetry server on port 9001\n";
+        simulator.stop();
+        return;
+    }
+    
+    std::cout << "Server running. Press Ctrl+C to stop.\n\n";
+    
+    // Print status every second
+    while (g_running) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        
+        const auto& stats = simulator.getStats();
+        std::cout << "\r[LIVE] "
+                  << "Price: $" << std::fixed << std::setprecision(2) << stats.currentPrice.load()
+                  << " | OPS: " << std::setprecision(0) << stats.ordersPerSecond.load()
+                  << " | Trades: " << stats.tradesExecuted.load()
+                  << " | Clients: " << telemetry.getClientCount()
+                  << "     " << std::flush;
+    }
+    
+    std::cout << "\n\nShutting down...\n";
+    telemetry.stop();
+    simulator.stop();
+    std::cout << "Hyperion Engine stopped.\n";
 }
 
 int main() {
@@ -96,6 +147,9 @@ int main() {
     
     // Run high-frequency benchmark
     runBenchmark();
+    
+    // Start WebSocket telemetry server
+    runTelemetryServer();
     
     return 0;
 }
