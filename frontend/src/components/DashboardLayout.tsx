@@ -1,6 +1,6 @@
 // Main app shell - header, tabs, split pane layout with tape and order book
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { cn } from '../lib/utils';
 import { TapeTable } from './TapeTable';
 import { OrderBook } from './OrderBook';
@@ -9,8 +9,10 @@ import { SymbolSelector } from './SymbolSelector';
 import { SymbolHeader } from './SymbolHeader';
 import { SymbolTab } from './SymbolTab';
 import { RealTimeClock } from './RealTimeClock';
+import { ModeToggle, type DataMode } from './ModeToggle';
 import { useMarketStore } from '../stores/useMarketStore';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { SimulationAdapter } from '../adapters';
 
 const PlusIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -54,6 +56,9 @@ export function DashboardLayout() {
   const [showSymbolSelector, setShowSymbolSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [dataMode, setDataMode] = useState<DataMode>('LIVE');
+  const [simConnected, setSimConnected] = useState(false);
+  const simAdapterRef = useRef<SimulationAdapter | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -83,6 +88,33 @@ export function DashboardLayout() {
   }, []);
 
   const { isConnected, connectionError, reconnect } = useWebSocket();
+
+  // Handle mode switching between Live and Simulation
+  const handleModeChange = useCallback(async (newMode: DataMode) => {
+    if (newMode === dataMode) return;
+    
+    if (newMode === 'SIM') {
+      // Switch to simulation mode
+      const adapter = new SimulationAdapter('ws://localhost:9001');
+      try {
+        await adapter.connect();
+        simAdapterRef.current = adapter;
+        setSimConnected(true);
+        setDataMode('SIM');
+      } catch (error) {
+        console.error('Failed to connect to simulation engine:', error);
+        alert('Failed to connect to Hyperion Engine. Make sure it\'s running on port 9001.');
+      }
+    } else {
+      // Switch back to live mode
+      if (simAdapterRef.current) {
+        simAdapterRef.current.disconnect();
+        simAdapterRef.current = null;
+      }
+      setSimConnected(false);
+      setDataMode('LIVE');
+    }
+  }, [dataMode]);
 
   const symbols = useMarketStore((state) => state.symbols);
   const tabs = useMarketStore((state) => state.tabs);
@@ -115,14 +147,26 @@ export function DashboardLayout() {
 
             <div className={cn(
               "flex items-center gap-2 px-2 py-1 rounded text-xs font-mono",
-              isConnected ? "text-[#00FF41]" : "text-[#FF4545]"
+              dataMode === 'SIM' 
+                ? (simConnected ? "text-[#A855F7]" : "text-gray-500")
+                : (isConnected ? "text-[#00FF41]" : "text-[#FF4545]")
             )}>
               <span className={cn(
                 "w-1.5 h-1.5 rounded-full",
-                isConnected ? "bg-[#00FF41]" : "bg-[#FF4545]"
+                dataMode === 'SIM'
+                  ? (simConnected ? "bg-[#A855F7]" : "bg-gray-500")
+                  : (isConnected ? "bg-[#00FF41]" : "bg-[#FF4545]")
               )} />
-              {isConnected ? 'LIVE' : 'OFFLINE'}
+              {dataMode === 'SIM' 
+                ? (simConnected ? 'HYPERION' : 'OFFLINE')
+                : (isConnected ? 'LIVE' : 'OFFLINE')
+              }
             </div>
+
+            <ModeToggle 
+              mode={dataMode} 
+              onChange={handleModeChange}
+            />
 
             {connectionError && (
               <button onClick={reconnect} className="text-xs text-orange-500 hover:text-orange-400 font-mono">
