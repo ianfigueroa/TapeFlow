@@ -19,6 +19,7 @@ hyperion.exe    # Windows
 ```
 
 The engine runs three phases:
+
 1. Order Book Test - Basic buy/sell matching validation
 2. Benchmark - 5-second high-frequency test targeting 1M orders/sec
 3. Telemetry Server - WebSocket server on ws://localhost:9001
@@ -35,13 +36,13 @@ The simulator generates realistic market activity by modeling five distinct trad
 
 ### Trader Types
 
-| Type | Distribution | Behavior |
-|------|--------------|----------|
-| Market Maker | 40% | Provides liquidity with tight spreads, high cancel rate |
-| Retail | 20% | Emotional trading, chases momentum, small order sizes |
-| Institutional | 15% | Patient and contrarian, larger orders, iceberg style |
-| Algo Momentum | 15% | Trend following, quick reactions |
-| Algo Mean Revert | 10% | Fades moves toward VWAP, contrarian |
+| Type             | Distribution | Behavior                                                |
+| ---------------- | ------------ | ------------------------------------------------------- |
+| Market Maker     | 40%          | Provides liquidity with tight spreads, high cancel rate |
+| Retail           | 20%          | Emotional trading, chases momentum, small order sizes   |
+| Institutional    | 15%          | Patient and contrarian, larger orders, iceberg style    |
+| Algo Momentum    | 15%          | Trend following, quick reactions                        |
+| Algo Mean Revert | 10%          | Fades moves toward VWAP, contrarian                     |
 
 ### Price Dynamics
 
