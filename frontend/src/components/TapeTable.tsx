@@ -2,8 +2,8 @@
 
 import { useRef, useEffect, useState, memo, useMemo } from 'react';
 import { cn } from '../lib/utils';
-import { formatPrice, formatTime, getSideColor, getSideBackground } from '../utils/formatters';
-import type { TradeWithAnalytics, AssetType, LiquidationSide } from '../types';
+import { formatPrice, formatTime, getSideBackground } from '../utils/formatters';
+import type { TradeWithAnalytics, AssetType } from '../types';
 import { flushTradeBuffer, setProcessedTrades, updateVwap, clearSymbolBuffer, getTradeRate, resetTradeRateTracker } from '../services/dataBuffer';
 import { enrichTradeWithAnalytics } from '../utils/calculations';
 
