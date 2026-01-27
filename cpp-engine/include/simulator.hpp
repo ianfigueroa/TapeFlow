@@ -108,7 +108,7 @@ namespace hyperion
         double realizedVolatility_ = 0.0002; // ~2 bps per tick
         std::deque<double> priceHistory_;
         std::deque<uint64_t> pendingOrderIds_;
-        
+
         // Rolling OPS calculation (more accurate than cumulative average)
         std::deque<std::pair<uint64_t, std::chrono::high_resolution_clock::time_point>> opsWindow_;
 
@@ -174,22 +174,28 @@ namespace hyperion
                 }
 
                 auto batchEnd = std::chrono::high_resolution_clock::now();
-                
+
                 // Rolling OPS calculation (last 2 seconds window)
                 opsWindow_.push_back({orderCount, batchEnd});
-                while (!opsWindow_.empty()) {
+                while (!opsWindow_.empty())
+                {
                     auto age = std::chrono::duration<double>(batchEnd - opsWindow_.front().second).count();
-                    if (age > 2.0) {
+                    if (age > 2.0)
+                    {
                         opsWindow_.pop_front();
-                    } else {
+                    }
+                    else
+                    {
                         break;
                     }
                 }
-                
-                if (opsWindow_.size() >= 2) {
+
+                if (opsWindow_.size() >= 2)
+                {
                     uint64_t ordersInWindow = orderCount - opsWindow_.front().first;
                     double windowTime = std::chrono::duration<double>(batchEnd - opsWindow_.front().second).count();
-                    if (windowTime > 0.1) {
+                    if (windowTime > 0.1)
+                    {
                         stats_.ordersPerSecond = static_cast<double>(ordersInWindow) / windowTime;
                     }
                 }
@@ -451,7 +457,7 @@ namespace hyperion
                 }
             }
         }
-        
+
         void cleanupStaleOrders()
         {
             // Aggressively cancel old orders to prevent memory bloat

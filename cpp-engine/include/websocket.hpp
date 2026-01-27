@@ -271,7 +271,7 @@ namespace hyperion
             // Set socket timeout so we can check running_ periodically
 #ifdef _WIN32
             DWORD timeout = 1000; // 1 second
-            setsockopt(serverSocket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&timeout), sizeof(timeout));
+            setsockopt(serverSocket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char *>(&timeout), sizeof(timeout));
 #else
             struct timeval tv;
             tv.tv_sec = 1;
@@ -287,7 +287,7 @@ namespace hyperion
 
                 if (clientSocket == INVALID_SOCKET)
                     continue;
-                
+
                 if (!running_)
                 {
                     CLOSE_SOCKET(clientSocket);
