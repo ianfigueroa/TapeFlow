@@ -1,10 +1,11 @@
 # TapeFlow
 
-Real-time crypto tape reader. Shows order flow, whale trades, and spoofing as it happens.
+Real-time crypto tape reader with high-frequency trading simulation. Shows order flow, whale trades, and market microstructure as it happens.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![C++](https://img.shields.io/badge/C++-20-00599C.svg)](https://isocpp.org/)
 [![MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ![TapeFlow Screenshot](./docs/image.png)
@@ -27,6 +28,38 @@ Problem is, BTC can push 500+ trades/sec when things get spicy. Tried the naive 
 - Velocity alerts when trade frequency spikes +300% above average
 - CVD (cumulative volume delta) to see net buying/selling pressure
 - Wall detection for big resting orders at key levels
+- Real-time price, volume, and delta charts
+- VWAP overlay for mean-reversion analysis
+- Configurable colors and theme profiles
+- High-frequency simulation mode (Hyperion engine)
+
+---
+
+## Features
+
+### Configurable Colors
+Customize the UI colors to your preference:
+- Buy/sell colors and backgrounds
+- Size-based intensity (larger trades get brighter colors)
+- Whale threshold customization
+- Chart line colors
+- Save and load theme profiles (Terminal, Classic, Ocean, High Contrast)
+
+### Chart Visualizations
+Toggle real-time charts from the settings panel:
+- Price line chart with time series
+- Volume bars overlay
+- VWAP (Volume Weighted Average Price) indicator
+- Cumulative Delta (order flow) chart
+- Adjustable chart height
+
+### Hyperion Simulation Engine
+Switch to SIM mode to run the C++ high-frequency trading simulator:
+- 700k+ orders per second throughput
+- Realistic trader personas (Market Makers, Retail, Institutional, Algos)
+- Mean-reverting price dynamics
+- Order flow imbalance simulation
+- WebSocket telemetry on port 9001
 
 ---
 
@@ -34,6 +67,7 @@ Problem is, BTC can push 500+ trades/sec when things get spicy. Tried the naive 
 
 **Frontend:** React 18, TypeScript, Vite, Tailwind, Zustand  
 **Backend:** Node/Express WebSocket proxy  
+**Engine:** C++20 high-frequency simulator (Hyperion)  
 **Data:** Binance public streams (no API key needed)
 
 ---
@@ -66,6 +100,19 @@ cd frontend && npm install && npm run dev
 ```
 
 Open http://localhost:5173. Works with any Binance USDT pair.
+
+### Simulation Mode
+
+To use the Hyperion simulation engine:
+
+```bash
+cd cpp-engine/build
+cmake --build . --config Release
+./Release/hyperion.exe  # Windows
+./hyperion              # Linux/Mac
+```
+
+Then click "SIM" in the frontend header to switch to simulation mode.
 
 ---
 
