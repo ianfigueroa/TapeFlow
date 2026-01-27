@@ -128,23 +128,53 @@ export function DeltaChart({
     ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw labels
-    ctx.fillStyle = '#666666';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    
-    // Max/min labels
-    ctx.fillText(`+${formatDelta(maxDelta)}`, width - 2, chartTop + 10);
-    ctx.fillText(`-${formatDelta(maxDelta)}`, width - 2, chartBottom - 2);
-    ctx.fillText('0', width - 2, zeroY + 3);
+    // Helper function to draw text with background for visibility
+    const drawTextWithBackground = (
+      text: string,
+      x: number,
+      y: number,
+      textColor: string,
+      font: string,
+      align: CanvasTextAlign = 'right',
+      bgColor: string = 'rgba(0, 0, 0, 0.75)',
+      padding: number = 2
+    ) => {
+      ctx.font = font;
+      ctx.textAlign = align;
+      const metrics = ctx.measureText(text);
+      const textWidth = metrics.width;
+      const textHeight = parseInt(font) || 10;
+      
+      let bgX = x - padding;
+      if (align === 'right') bgX = x - textWidth - padding;
+      else if (align === 'center') bgX = x - textWidth / 2 - padding;
+      
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(bgX, y - textHeight, textWidth + padding * 2, textHeight + padding);
+      
+      ctx.fillStyle = textColor;
+      ctx.fillText(text, x, y);
+    };
 
-    // Current delta label
-    ctx.fillStyle = lastPoint.delta >= 0 
+    // Draw labels with backgrounds
+    drawTextWithBackground(`+${formatDelta(maxDelta)}`, width - 2, chartTop + 10, '#aaaaaa', '10px monospace');
+    drawTextWithBackground(`-${formatDelta(maxDelta)}`, width - 2, chartBottom - 2, '#aaaaaa', '10px monospace');
+    drawTextWithBackground('0', width - 2, zeroY + 3, '#aaaaaa', '10px monospace');
+
+    // Current delta label with background
+    const deltaColor = lastPoint.delta >= 0 
       ? colors.deltaPositiveColor 
       : colors.deltaNegativeColor;
-    ctx.font = 'bold 11px monospace';
     const sign = lastPoint.delta >= 0 ? '+' : '';
-    ctx.fillText(`CVD: ${sign}${formatDelta(lastPoint.delta)}`, width - 2, lastY - 8);
+    drawTextWithBackground(
+      `CVD: ${sign}${formatDelta(lastPoint.delta)}`,
+      width - 2,
+      lastY - 8,
+      deltaColor,
+      'bold 11px monospace',
+      'right',
+      'rgba(0, 0, 0, 0.85)'
+    );
 
   }, [data, width, height, colors]);
 
