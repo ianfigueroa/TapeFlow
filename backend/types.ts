@@ -4,6 +4,12 @@ export type AssetType = 'crypto';
 
 export type TradeSide = 'buy' | 'sell' | 'neutral';
 
+/** Type of trade - regular trade or forced liquidation */
+export type TradeType = 'trade' | 'liquidation';
+
+/** For liquidations, which side was liquidated */
+export type LiquidationSide = 'long' | 'short';
+
 /**
  * Individual trade from the exchange
  * 
@@ -19,6 +25,12 @@ export interface Trade {
   volume: number;          // Base asset qty (e.g. 0.5 BTC)
   side: TradeSide;         // Who was the aggressor
   exchange?: string;
+  /** Whether this is a forced liquidation */
+  isLiquidation?: boolean;
+  /** Type of trade for filtering */
+  tradeType?: TradeType;
+  /** Which side was liquidated (long = buyer liquidated, short = seller liquidated) */
+  liquidationSide?: LiquidationSide;
 }
 
 /**
