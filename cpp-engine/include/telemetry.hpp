@@ -102,8 +102,15 @@ namespace hyperion
             json << "\"price\":" << stats.currentPrice.load() << ",";
             json << "\"high\":" << stats.highPrice.load() << ",";
             json << "\"low\":" << stats.lowPrice.load() << ",";
+            json << "\"vwap\":" << stats.vwap.load() << ",";
+
+            // Order flow data
+            json << "\"cumulativeDelta\":" << std::setprecision(4) << stats.cumulativeDelta.load() << ",";
+            json << "\"buyVolume\":" << stats.buyVolume.load() << ",";
+            json << "\"sellVolume\":" << stats.sellVolume.load() << ",";
 
             // Order book
+            json << std::setprecision(2);
             json << "\"bestBid\":" << book_->getBestBid() << ",";
             json << "\"bestAsk\":" << book_->getBestAsk() << ",";
             json << "\"spread\":" << book_->getSpread() << ",";
@@ -113,6 +120,7 @@ namespace hyperion
             json << "\"ordersPerSecond\":" << std::setprecision(0) << stats.ordersPerSecond.load() << ",";
             json << "\"totalOrders\":" << stats.ordersGenerated.load() << ",";
             json << "\"totalTrades\":" << stats.tradesExecuted.load() << ",";
+            json << "\"volatility\":" << std::setprecision(6) << stats.volatility.load() << ",";
 
             // Order book depth (top 10 levels)
             json << "\"bids\":[";
