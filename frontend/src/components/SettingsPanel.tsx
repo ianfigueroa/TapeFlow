@@ -218,6 +218,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               checked={visualization.showVwapLine}
               onChange={(checked) => updateVisualization({ showVwapLine: checked })}
             />
+            <Toggle
+              label="Show Order Book Heatmap"
+              checked={visualization.showHeatmap}
+              onChange={(checked) => updateVisualization({ showHeatmap: checked })}
+            />
 
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-300">Chart Height (px)</span>
