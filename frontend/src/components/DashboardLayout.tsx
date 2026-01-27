@@ -11,7 +11,9 @@ import { SymbolTab } from './SymbolTab';
 import { RealTimeClock } from './RealTimeClock';
 import { ModeToggle, type DataMode } from './ModeToggle';
 import { SettingsPanel } from './SettingsPanel';
+import { ChartPanel } from './ChartPanel';
 import { useMarketStore } from '../stores/useMarketStore';
+import { useSettingsStore } from '../stores/useSettingsStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { SimulationAdapter } from '../adapters';
 
@@ -152,6 +154,8 @@ export function DashboardLayout() {
 
   const currentSymbolData = selectedSymbol ? symbols.get(selectedSymbol) : null;
   const orderBookWidth = Math.min(Math.max(windowSize.width * 0.35, 400), 600);
+  const visualization = useSettingsStore((state) => state.visualization);
+  const showCharts = visualization.showPriceChart || visualization.showVolumeChart || visualization.showDeltaChart;
 
   const handlePopout = useCallback((symbol: string) => {
     const url = `${window.location.origin}/popout/${symbol}`;
@@ -340,10 +344,16 @@ export function DashboardLayout() {
               )}
             </div>
 
-            <div style={{ width: orderBookWidth }} className="p-2 flex-shrink-0 flex flex-col gap-2 h-full">
+            <div style={{ width: orderBookWidth }} className="p-2 flex-shrink-0 flex flex-col gap-2 h-full overflow-y-auto">
               {currentSymbolData ? (
                 <>
-                  <div className="flex-none" style={{ height: '30%', minHeight: '180px' }}>
+                  {showCharts && (
+                    <ChartPanel
+                      trades={currentSymbolData.trades}
+                      width={orderBookWidth - 16}
+                    />
+                  )}
+                  <div className="flex-none" style={{ height: showCharts ? '20%' : '30%', minHeight: '150px' }}>
                     <AlgoSignals
                       symbol={currentSymbolData.symbol}
                       velocitySpike={300}
