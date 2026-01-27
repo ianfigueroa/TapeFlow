@@ -350,6 +350,7 @@ export function DashboardLayout() {
                   {showCharts && (
                     <ChartPanel
                       trades={currentSymbolData.trades}
+                      symbol={currentSymbolData.symbol}
                       width={orderBookWidth - 16}
                     />
                   )}
