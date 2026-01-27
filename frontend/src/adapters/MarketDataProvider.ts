@@ -171,9 +171,10 @@ export class SimulationAdapter implements MarketDataProvider {
       const symbol = this.targetSymbol;
       
       // Generate burst of trades to simulate high-frequency flow
-      // Engine runs at ~960K orders/sec, we emit 10-30 trades per tick (50ms)
-      // This gives ~200-600 trades/sec on the frontend (realistic display rate)
-      const tradesPerTick = 10 + Math.floor(Math.random() * 20);
+      // Engine runs at ~700K+ orders/sec internally
+      // We emit 20-50 trades per tick (50ms) = 400-1000 trades/sec on frontend
+      // This is a realistic tape display rate that's still readable
+      const tradesPerTick = 20 + Math.floor(Math.random() * 30);
       const priceVariance = telemetry.spread * 0.5; // Trade prices vary within spread
       
       for (let i = 0; i < tradesPerTick; i++) {
