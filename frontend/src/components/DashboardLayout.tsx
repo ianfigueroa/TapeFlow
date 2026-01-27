@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { cn } from '../lib/utils';
 import { TapeTable } from './TapeTable';
 import { OrderBook } from './OrderBook';
+import { OrderBookHeatmap } from './OrderBookHeatmap';
 import { AlgoSignals } from './AlgoSignals';
 import { SymbolSelector } from './SymbolSelector';
 import { SymbolHeader } from './SymbolHeader';
@@ -366,6 +367,20 @@ export function DashboardLayout() {
                       symbol={currentSymbolData.symbol}
                       width={orderBookWidth - 16}
                     />
+                  )}
+                  {visualization.showHeatmap && (
+                    <div className="bg-black rounded border border-gray-800 p-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-mono text-gray-500 uppercase">
+                          Order Book Heatmap
+                        </span>
+                      </div>
+                      <OrderBookHeatmap
+                        symbol={currentSymbolData.symbol}
+                        width={orderBookWidth - 32}
+                        height={180}
+                      />
+                    </div>
                   )}
                   <div className="flex-none" style={{ height: showCharts ? '20%' : '30%', minHeight: '150px' }}>
                     <AlgoSignals

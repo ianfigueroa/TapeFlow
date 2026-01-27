@@ -27,6 +27,7 @@ export interface VisualizationSettings {
   showVolumeChart: boolean;
   showDeltaChart: boolean;
   showVwapLine: boolean;
+  showHeatmap: boolean;    // Order book depth heatmap
   chartHeight: number;  // pixels
 }
 
@@ -75,6 +76,7 @@ const defaultVisualization: VisualizationSettings = {
   showVolumeChart: true,
   showDeltaChart: true,
   showVwapLine: true,
+  showHeatmap: true,
   chartHeight: 200,
 };
 
