@@ -1,19 +1,39 @@
 // Combined visualization panel with price, volume, and delta charts
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { PriceChart, type PriceDataPoint } from './PriceChart';
 import { DeltaChart, type DeltaDataPoint } from './DeltaChart';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { getDisplayTrades } from '../services/dataBuffer';
 import type { TradeWithAnalytics } from '../types';
 
 interface ChartPanelProps {
   trades: TradeWithAnalytics[];
+  symbol?: string;
   width?: number;
   className?: string;
 }
 
-export function ChartPanel({ trades, width = 600, className = '' }: ChartPanelProps) {
+export function ChartPanel({ trades: externalTrades, symbol, width = 600, className = '' }: ChartPanelProps) {
   const visualization = useSettingsStore((state) => state.visualization);
+  const [bufferTrades, setBufferTrades] = useState<TradeWithAnalytics[]>([]);
+
+  // Poll the buffer for chart data at 10fps (charts don't need 60fps)
+  useEffect(() => {
+    if (!symbol) return;
+    
+    const intervalId = setInterval(() => {
+      const processed = getDisplayTrades(symbol);
+      if (processed.length > 0) {
+        setBufferTrades(processed);
+      }
+    }, 100); // 10fps for charts is plenty
+    
+    return () => clearInterval(intervalId);
+  }, [symbol]);
+
+  // Use buffer trades if available (from TapeTable's processing), otherwise use external
+  const trades = symbol && bufferTrades.length > 0 ? bufferTrades : externalTrades;
 
   // Convert trades to chart data points
   // Aggregate by time buckets for smoother charts
