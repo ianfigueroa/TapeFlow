@@ -25,6 +25,10 @@ namespace hyperion
         std::atomic<double> lowPrice{0.0};
         std::atomic<double> ordersPerSecond{0.0};
         std::atomic<double> volatility{0.0};
+        std::atomic<double> vwap{0.0};
+        std::atomic<double> cumulativeDelta{0.0};
+        std::atomic<double> buyVolume{0.0};
+        std::atomic<double> sellVolume{0.0};
         std::atomic<bool> running{false};
     };
 
@@ -112,6 +116,8 @@ namespace hyperion
         double buyPressure_ = 0.5;
         int consecutiveBuys_ = 0;
         int consecutiveSells_ = 0;
+        double totalBuyVolume_ = 0.0;
+        double totalSellVolume_ = 0.0;
 
         SimulationStats stats_;
         std::thread simulationThread_;
@@ -274,16 +280,24 @@ namespace hyperion
                 consecutiveBuys_++;
                 consecutiveSells_ = 0;
                 buyPressure_ = buyPressure_ * 0.99 + 0.01;
+                totalBuyVolume_ += size;
             }
             else
             {
                 consecutiveSells_++;
                 consecutiveBuys_ = 0;
                 buyPressure_ = buyPressure_ * 0.99;
+                totalSellVolume_ += size;
             }
 
             // Update momentum based on order flow imbalance
             momentum_ = (buyPressure_ - 0.5) * 2.0;
+
+            // Update stats for telemetry
+            stats_.vwap = vwap_;
+            stats_.buyVolume = totalBuyVolume_;
+            stats_.sellVolume = totalSellVolume_;
+            stats_.cumulativeDelta = totalBuyVolume_ - totalSellVolume_;
 
             uint64_t orderId = book_.addOrder(side, price, size);
 
