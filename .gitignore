@@ -40,3 +40,6 @@ coverage/
 # Personal
 .notes
 .prep
+
+# Architecture documentation
+docs/ARCHITECTURE.md
