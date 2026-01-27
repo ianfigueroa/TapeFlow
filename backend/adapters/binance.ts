@@ -3,7 +3,7 @@
 import WebSocket from 'ws';
 import axios from 'axios';
 import { BaseAdapter } from './base';
-import { Trade, OrderBook, Ticker, SymbolInfo, AssetType, OrderBookLevel } from '../types';
+import { Trade, OrderBook, Ticker, SymbolInfo, AssetType, OrderBookLevel, LiquidationSide } from '../types';
 
 interface BinanceConfig {
   apiKey?: string;
@@ -17,10 +17,14 @@ export class BinanceAdapter extends BaseAdapter {
   
   private config: BinanceConfig;
   private ws: WebSocket | null = null;
+  private futuresWs: WebSocket | null = null;  // Separate WebSocket for futures liquidations
   private baseUrl: string;
+  private futuresBaseUrl: string;
   private wsBaseUrl: string;
+  private futuresWsBaseUrl: string;
   private streamId: number = 1;  // Binance uses IDs to match sub/unsub responses
   private subscribedStreams: Set<string> = new Set();
+  private subscribedLiquidationStreams: Set<string> = new Set();
 
   constructor(config: BinanceConfig = {}) {
     super();
@@ -31,10 +35,19 @@ export class BinanceAdapter extends BaseAdapter {
       ? 'https://testnet.binance.vision/api/v3'
       : 'https://api.binance.com/api/v3';
     
+    this.futuresBaseUrl = config.testnet
+      ? 'https://testnet.binancefuture.com/fapi/v1'
+      : 'https://fapi.binance.com/fapi/v1';
+    
     // Combined stream endpoint lets us manage multiple streams on one socket
     this.wsBaseUrl = config.testnet
       ? 'wss://testnet.binance.vision/stream'
       : 'wss://stream.binance.com:9443/stream';
+    
+    // Futures WebSocket for liquidation data
+    this.futuresWsBaseUrl = config.testnet
+      ? 'wss://stream.binancefuture.com/stream'
+      : 'wss://fstream.binance.com/stream';
   }
 
   /**
@@ -47,10 +60,12 @@ export class BinanceAdapter extends BaseAdapter {
     console.log('[Binance] Connecting...');
     
     return new Promise((resolve, reject) => {
+      // Connect to spot/main WebSocket
       this.ws = new WebSocket(this.wsBaseUrl);
       
       this.ws.on('open', () => {
-        console.log('[Binance] WebSocket opened');
+        console.log('[Binance] Spot WebSocket opened');
+        this.connectFuturesWebSocket(); // Also connect to futures for liquidations
         this.emitConnect();
         resolve();
       });
@@ -81,6 +96,117 @@ export class BinanceAdapter extends BaseAdapter {
         }
       }, 10000);
     });
+  }
+
+  /**
+   * Connect to Binance Futures WebSocket for liquidation data
+   */
+  private connectFuturesWebSocket(): void {
+    console.log('[Binance] Connecting to Futures WebSocket for liquidations...');
+    
+    this.futuresWs = new WebSocket(this.futuresWsBaseUrl);
+    
+    this.futuresWs.on('open', () => {
+      console.log('[Binance] Futures WebSocket opened');
+      // Re-subscribe to any existing liquidation streams
+      if (this.subscribedLiquidationStreams.size > 0) {
+        const streams = Array.from(this.subscribedLiquidationStreams);
+        this.futuresWs!.send(JSON.stringify({
+          method: 'SUBSCRIBE',
+          params: streams,
+          id: this.streamId++,
+        }));
+      }
+    });
+
+    this.futuresWs.on('message', (data: Buffer) => {
+      this.handleFuturesMessage(data.toString());
+    });
+
+    this.futuresWs.on('error', (error: Error) => {
+      console.error('[Binance] Futures WebSocket error:', error);
+    });
+
+    this.futuresWs.on('close', () => {
+      console.log('[Binance] Futures WebSocket closed');
+      // Attempt reconnect after a delay
+      if (this.connected) {
+        setTimeout(() => this.connectFuturesWebSocket(), 5000);
+      }
+    });
+  }
+
+  /**
+   * Handle messages from the Futures WebSocket (liquidations)
+   */
+  private handleFuturesMessage(data: string): void {
+    try {
+      const msg = JSON.parse(data);
+      
+      // Combined stream format wraps data in { stream, data }
+      if (msg.stream && msg.stream.includes('@forceOrder')) {
+        this.handleLiquidation(msg.data);
+        return;
+      }
+      
+      // Direct format
+      if (msg.e === 'forceOrder') {
+        this.handleLiquidation(msg);
+      }
+    } catch (error) {
+      console.error('[Binance] Error parsing futures message:', error);
+    }
+  }
+
+  /**
+   * Process liquidation event from Binance Futures
+   * 
+   * Liquidation event format:
+   * {
+   *   "e": "forceOrder",          // Event Type
+   *   "E": 1568014460893,         // Event Time
+   *   "o": {
+   *     "s": "BTCUSDT",           // Symbol
+   *     "S": "SELL",              // Side (SELL = Long liquidation, BUY = Short liquidation)
+   *     "o": "LIMIT",             // Order Type
+   *     "f": "IOC",               // Time in Force
+   *     "q": "0.014",             // Original Quantity
+   *     "p": "9910",              // Price
+   *     "ap": "9910",             // Average Price
+   *     "X": "FILLED",            // Order Status
+   *     "l": "0.014",             // Order Last Filled Quantity
+   *     "z": "0.014",             // Order Filled Accumulated Quantity
+   *     "T": 1568014460893        // Order Trade Time
+   *   }
+   * }
+   */
+  private handleLiquidation(msg: any): void {
+    const order = msg.o || msg;
+    const symbol = order.s || order.symbol;
+    const side = order.S || order.side;
+    
+    // Determine liquidation side:
+    // SELL order = Long position being liquidated (forced to sell)
+    // BUY order = Short position being liquidated (forced to buy)
+    const liquidationSide: LiquidationSide = side === 'SELL' ? 'long' : 'short';
+    const tradeSide = side === 'SELL' ? 'sell' : 'buy';
+    
+    const trade: Trade = {
+      id: `liq-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      symbol: symbol?.toUpperCase() || 'UNKNOWN',
+      assetType: 'crypto',
+      timestamp: order.T || msg.E || Date.now(),
+      price: parseFloat(order.ap || order.p || 0),  // Use average price if available
+      volume: parseFloat(order.q || order.z || 0),
+      side: tradeSide,
+      exchange: 'BINANCE',
+      isLiquidation: true,
+      tradeType: 'liquidation',
+      liquidationSide,
+    };
+    
+    console.log(`[Binance] 💀 Liquidation: ${liquidationSide.toUpperCase()} ${trade.symbol} @ ${trade.price} x ${trade.volume}`);
+    this.emitTrade(trade);
   }
 
   /**
@@ -265,8 +391,14 @@ export class BinanceAdapter extends BaseAdapter {
       this.ws = null;
     }
     
+    if (this.futuresWs) {
+      this.futuresWs.close();
+      this.futuresWs = null;
+    }
+    
     this.subscriptions.clear();
     this.subscribedStreams.clear();
+    this.subscribedLiquidationStreams.clear();
     this.emitDisconnect();
     console.log('[Binance] Disconnected');
   }
@@ -278,6 +410,7 @@ export class BinanceAdapter extends BaseAdapter {
    * - trade: Real-time trade executions
    * - depth20@100ms: Order book snapshots at 10 updates/second
    * - ticker: 24hr rolling statistics
+   * - forceOrder: Forced liquidations (Futures only)
    */
   async subscribe(symbol: string, assetType: AssetType = 'crypto'): Promise<void> {
     // Binance expects lowercase symbols with no separators
@@ -290,6 +423,7 @@ export class BinanceAdapter extends BaseAdapter {
     
     this.subscriptions.add(lowerSymbol.toUpperCase());
     
+    // Spot/main streams
     const streams = [
       `${lowerSymbol}@trade`,
       `${lowerSymbol}@depth20@100ms`,
@@ -307,7 +441,22 @@ export class BinanceAdapter extends BaseAdapter {
       streams.forEach(s => this.subscribedStreams.add(s));
     }
     
-    console.log(`[Binance] Subscribed to ${lowerSymbol.toUpperCase()} (trade, depth, ticker)`);
+    // Subscribe to liquidations on Futures WebSocket
+    const liquidationStream = `${lowerSymbol}@forceOrder`;
+    if (this.futuresWs && this.futuresWs.readyState === WebSocket.OPEN) {
+      this.futuresWs.send(JSON.stringify({
+        method: 'SUBSCRIBE',
+        params: [liquidationStream],
+        id: this.streamId++,
+      }));
+      this.subscribedLiquidationStreams.add(liquidationStream);
+      console.log(`[Binance] Subscribed to ${lowerSymbol.toUpperCase()} liquidations`);
+    } else {
+      // Queue for later when futures WS connects
+      this.subscribedLiquidationStreams.add(liquidationStream);
+    }
+    
+    console.log(`[Binance] Subscribed to ${lowerSymbol.toUpperCase()} (trade, depth, ticker, liquidations)`);
     
     // Fetch initial snapshots so we don't have to wait for the first stream update
     this.fetchOrderBookSnapshot(lowerSymbol.toUpperCase());
@@ -409,6 +558,17 @@ export class BinanceAdapter extends BaseAdapter {
       
       streams.forEach(s => this.subscribedStreams.delete(s));
     }
+    
+    // Unsubscribe from liquidations on Futures WebSocket
+    const liquidationStream = `${lowerSymbol}@forceOrder`;
+    if (this.futuresWs && this.futuresWs.readyState === WebSocket.OPEN) {
+      this.futuresWs.send(JSON.stringify({
+        method: 'UNSUBSCRIBE',
+        params: [liquidationStream],
+        id: this.streamId++,
+      }));
+    }
+    this.subscribedLiquidationStreams.delete(liquidationStream);
     
     this.subscriptions.delete(upperSymbol);
     console.log(`[Binance] Unsubscribed from ${upperSymbol}`);
