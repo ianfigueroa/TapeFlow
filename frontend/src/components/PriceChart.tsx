@@ -69,8 +69,6 @@ export function PriceChart({
     const xScale = (i: number) => (i / (data.length - 1)) * (width - 20) + 10;
     const yScale = (price: number) =>
       chartBottom - ((price - minPrice) / (maxPrice - minPrice)) * chartHeight;
-    const volumeScale = (vol: number) =>
-      volumeTop + volumeHeight - (vol / maxVolume) * volumeHeight;
 
     // Draw grid lines
     ctx.strokeStyle = '#1a1a1a';
@@ -140,8 +138,38 @@ export function PriceChart({
     ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw price labels
-    ctx.fillStyle = '#666666';
+    // Helper function to draw text with background for visibility
+    const drawTextWithBackground = (
+      text: string,
+      x: number,
+      y: number,
+      textColor: string,
+      font: string,
+      align: CanvasTextAlign = 'right',
+      bgColor: string = 'rgba(0, 0, 0, 0.75)',
+      padding: number = 2
+    ) => {
+      ctx.font = font;
+      ctx.textAlign = align;
+      const metrics = ctx.measureText(text);
+      const textWidth = metrics.width;
+      const textHeight = parseInt(font) || 10;
+      
+      // Calculate background position based on alignment
+      let bgX = x - padding;
+      if (align === 'right') bgX = x - textWidth - padding;
+      else if (align === 'center') bgX = x - textWidth / 2 - padding;
+      
+      // Draw background
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(bgX, y - textHeight, textWidth + padding * 2, textHeight + padding);
+      
+      // Draw text
+      ctx.fillStyle = textColor;
+      ctx.fillText(text, x, y);
+    };
+
+    // Draw price labels with backgrounds
     ctx.font = '10px monospace';
     ctx.textAlign = 'right';
     
@@ -149,20 +177,32 @@ export function PriceChart({
     for (let i = 0; i <= 4; i++) {
       const price = minPrice + priceStep * i;
       const y = yScale(price);
-      ctx.fillText(price.toFixed(2), width - 2, y + 3);
+      drawTextWithBackground(price.toFixed(2), width - 2, y + 3, '#aaaaaa', '10px monospace');
     }
 
-    // Draw current price label
-    ctx.fillStyle = colors.priceLineColor;
-    ctx.font = 'bold 11px monospace';
-    ctx.fillText(`$${lastPoint.price.toFixed(2)}`, width - 2, lastY - 8);
+    // Draw current price label with background
+    drawTextWithBackground(
+      `$${lastPoint.price.toFixed(2)}`,
+      width - 2,
+      lastY - 8,
+      colors.priceLineColor,
+      'bold 11px monospace',
+      'right',
+      'rgba(0, 0, 0, 0.85)'
+    );
 
-    // Draw VWAP label if enabled
+    // Draw VWAP label if enabled with background
     if (showVwap) {
       const vwapY = yScale(lastPoint.vwap);
-      ctx.fillStyle = colors.vwapLineColor;
-      ctx.font = '10px monospace';
-      ctx.fillText(`VWAP: ${lastPoint.vwap.toFixed(2)}`, width - 2, vwapY + 12);
+      drawTextWithBackground(
+        `VWAP: ${lastPoint.vwap.toFixed(2)}`,
+        width - 2,
+        vwapY + 12,
+        colors.vwapLineColor,
+        '10px monospace',
+        'right',
+        'rgba(0, 0, 0, 0.75)'
+      );
     }
 
   }, [data, width, height, showVolume, showVwap, colors]);
