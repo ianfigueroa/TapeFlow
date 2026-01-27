@@ -10,6 +10,7 @@ import { SymbolHeader } from './SymbolHeader';
 import { SymbolTab } from './SymbolTab';
 import { RealTimeClock } from './RealTimeClock';
 import { ModeToggle, type DataMode } from './ModeToggle';
+import { SettingsPanel } from './SettingsPanel';
 import { useMarketStore } from '../stores/useMarketStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { SimulationAdapter } from '../adapters';
@@ -383,65 +384,8 @@ export function DashboardLayout() {
       )}
 
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Settings</h2>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Combined Tape Mode</span>
-                <button
-                  onClick={() => updateSettings({ combinedTape: !settings.combinedTape })}
-                  className={cn(
-                    "w-12 h-6 rounded-full transition-colors",
-                    settings.combinedTape ? "bg-blue-600" : "bg-gray-700"
-                  )}
-                >
-                  <div className={cn(
-                    "w-5 h-5 bg-white rounded-full transition-transform",
-                    settings.combinedTape ? "translate-x-6" : "translate-x-0.5"
-                  )} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Pause Scroll</span>
-                <button
-                  onClick={() => updateSettings({ pauseScroll: !settings.pauseScroll })}
-                  className={cn(
-                    "w-12 h-6 rounded-full transition-colors",
-                    settings.pauseScroll ? "bg-yellow-600" : "bg-gray-700"
-                  )}
-                >
-                  <div className={cn(
-                    "w-5 h-5 bg-white rounded-full transition-transform",
-                    settings.pauseScroll ? "translate-x-6" : "translate-x-0.5"
-                  )} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-gray-300">Max Trades in Memory</span>
-                <select
-                  value={settings.maxTrades}
-                  onChange={(e) => updateSettings({ maxTrades: parseInt(e.target.value) })}
-                  className="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm"
-                >
-                  <option value={100}>100</option>
-                  <option value={250}>250</option>
-                  <option value={500}>500</option>
-                  <option value={1000}>1000</option>
-                </select>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowSettings(false)}
-              className="mt-6 w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          </div>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
+          <SettingsPanel onClose={() => setShowSettings(false)} />
         </div>
       )}
     </div>

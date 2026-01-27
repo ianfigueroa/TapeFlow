@@ -268,6 +268,17 @@ namespace hyperion
 
         void acceptLoop()
         {
+            // Set socket timeout so we can check running_ periodically
+#ifdef _WIN32
+            DWORD timeout = 1000; // 1 second
+            setsockopt(serverSocket_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char*>(&timeout), sizeof(timeout));
+#else
+            struct timeval tv;
+            tv.tv_sec = 1;
+            tv.tv_usec = 0;
+            setsockopt(serverSocket_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+
             while (running_)
             {
                 sockaddr_in clientAddr{};
@@ -276,17 +287,23 @@ namespace hyperion
 
                 if (clientSocket == INVALID_SOCKET)
                     continue;
+                
+                if (!running_)
+                {
+                    CLOSE_SOCKET(clientSocket);
+                    break;
+                }
 
-                // Handle WebSocket handshake in separate thread
-                std::thread([this, clientSocket]()
-                            {
-                if (performHandshake(clientSocket)) {
+                // Perform handshake synchronously to avoid detached thread issues
+                if (performHandshake(clientSocket))
+                {
                     std::lock_guard<std::mutex> lock(clientsMutex_);
                     clients_.push_back(clientSocket);
-                } else {
+                }
+                else
+                {
                     CLOSE_SOCKET(clientSocket);
-                } })
-                    .detach();
+                }
             }
         }
 

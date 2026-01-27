@@ -77,7 +77,7 @@ void runTelemetryServer()
     TelemetryServer telemetry(9001);
 
     // Start all components
-    simulator.start(500000); // 500k orders/sec for demo
+    simulator.start(1000000); // 1M orders/sec target
 
     if (!telemetry.start(book, simulator))
     {

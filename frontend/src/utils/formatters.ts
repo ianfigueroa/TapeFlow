@@ -1,5 +1,12 @@
 // Number formatting utilities for prices, volumes, and percentages
 
+import { useSettingsStore } from '../stores/useSettingsStore';
+
+// Get current color settings (for non-hook contexts)
+function getColors() {
+  return useSettingsStore.getState().colors;
+}
+
 export function formatPrice(price: number, _assetType?: string): string {
   if (!price || isNaN(price)) return '-';
   
@@ -168,53 +175,99 @@ export function formatCryptoAmount(value: number): string {
 // =======================
 // Color Utilities
 // =======================
-// HIGH CONTRAST MODE - Maximum visibility on pure black backgrounds
-// Using terminal-style neon colors that are easy on the eyes
+// Configurable colors - users can customize these via settings
 
 /**
  * Get text color for buy/sell side
- * 
- * Terminal Green (#00FF41) for buys - classic terminal look, very readable
- * Bright Red (#FF4545) for sells - urgent but not harsh
+ * Uses configurable colors from settings store
  */
 export function getSideColor(side: string): string {
+  const colors = getColors();
   switch (side) {
     case 'buy':
-      return 'text-[#00FF41]';  // Terminal green - easier on eyes than pure neon
+      return `text-[${colors.buyColor}]`;
     case 'sell':
-      return 'text-[#FF4545]';  // Bright red - visible but not harsh
+      return `text-[${colors.sellColor}]`;
     default:
-      return 'text-gray-500';
+      return `text-[${colors.neutralColor}]`;
+  }
+}
+
+/**
+ * Get raw hex color for buy/sell side (for inline styles and charts)
+ */
+export function getSideHexColor(side: string): string {
+  const colors = getColors();
+  switch (side) {
+    case 'buy':
+      return colors.buyColor;
+    case 'sell':
+      return colors.sellColor;
+    default:
+      return colors.neutralColor;
   }
 }
 
 /**
  * Get background color for buy/sell side
- * 
- * PURE BLACK base (#000000) for maximum contrast
- * NO transitions or fading - colors stay permanent
- * Thick left border for instant side recognition
+ * Uses configurable colors from settings store
  */
 export function getSideBackground(side: string): string {
+  const colors = getColors();
   switch (side) {
     case 'buy':
-      // Pure black with minimal green tint + bright border
-      return 'bg-black border-l-4 border-l-[#00FF41]';
+      return `bg-[${colors.buyBackground}] border-l-4 border-l-[${colors.buyColor}]`;
     case 'sell':
-      // Pure black with minimal red tint + bright border  
-      return 'bg-black border-l-4 border-l-[#FF4545]';
+      return `bg-[${colors.sellBackground}] border-l-4 border-l-[${colors.sellColor}]`;
     default:
       return 'bg-black border-l-4 border-l-gray-700';
   }
 }
 
 /**
+ * Get intensity-adjusted color based on trade size
+ * Larger trades get more vivid colors
+ */
+export function getIntensityColor(side: string, amount: number): { color: string; background: string; isWhale: boolean } {
+  const colors = getColors();
+  const isWhale = amount >= colors.whaleThreshold;
+  
+  if (!colors.intensityEnabled) {
+    return {
+      color: side === 'buy' ? colors.buyColor : colors.sellColor,
+      background: side === 'buy' ? colors.buyBackground : colors.sellBackground,
+      isWhale,
+    };
+  }
+  
+  // Calculate intensity (0.3 to 1.0) based on trade size
+  const intensity = Math.min(1.0, 0.3 + (amount / colors.whaleThreshold) * 0.7);
+  
+  if (isWhale) {
+    // Whale trades get maximum intensity with glow effect
+    return {
+      color: side === 'buy' ? colors.buyColor : colors.sellColor,
+      background: side === 'buy' ? colors.buyBackground : colors.sellBackground,
+      isWhale: true,
+    };
+  }
+  
+  // For smaller trades, adjust opacity
+  return {
+    color: side === 'buy' ? colors.buyColor : colors.sellColor,
+    background: side === 'buy' ? colors.buyBackground : colors.sellBackground,
+    isWhale: false,
+  };
+}
+
+/**
  * Get color for price change (+/-)
  */
 export function getPriceChangeColor(change: number): string {
-  if (change > 0) return 'text-[#00FF41]';  // Terminal green
-  if (change < 0) return 'text-[#FF4545]';  // Bright red
-  return 'text-gray-400';
+  const colors = getColors();
+  if (change > 0) return `text-[${colors.buyColor}]`;
+  if (change < 0) return `text-[${colors.sellColor}]`;
+  return `text-[${colors.neutralColor}]`;
 }
 
 /**
