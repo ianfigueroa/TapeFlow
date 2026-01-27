@@ -5,13 +5,18 @@ import type { Trade, OrderBook, Ticker, TradeWithAnalytics } from '../types';
 const MAX_BUFFER = 1000;
 const MAX_VISIBLE = 100;
 
-// Trade rate tracking (single source of truth for all components)
+// Trade rate tracking - Sliding Window OPS Counter
+// Stores individual trade timestamps and calculates OPS on-demand by filtering
+// timestamps within the last 1000ms. This provides accurate real-time OPS values.
 interface RateTracker {
-  timestamps: number[];
-  current: number;
-  avg: number;
-  history: number[];
+  timestamps: number[];  // Raw trade timestamps (kept for 10s for averaging)
+  history: number[];     // Rolling history of OPS samples for averaging
+  lastSampleTime: number; // Last time we took an OPS sample
 }
+
+const SLIDING_WINDOW_MS = 1000;    // 1 second window for current OPS
+const MAX_TIMESTAMP_AGE_MS = 10000; // Keep 10 seconds of timestamps for averaging
+const MAX_HISTORY_SAMPLES = 10;     // Keep 10 OPS samples for moving average
 
 const rateTrackers = new Map<string, RateTracker>();
 
@@ -19,33 +24,83 @@ function getRateTracker(symbol: string): RateTracker {
   const key = symbol.toUpperCase();
   let t = rateTrackers.get(key);
   if (!t) {
-    t = { timestamps: [], current: 0, avg: 0, history: [] };
+    t = { timestamps: [], history: [], lastSampleTime: Date.now() };
     rateTrackers.set(key, t);
   }
   return t;
 }
 
 function recordTradeRate(symbol: string): void {
-  getRateTracker(symbol).timestamps.push(Date.now());
-}
-
-function updateRates(symbol: string): void {
   const t = getRateTracker(symbol);
   const now = Date.now();
-  t.timestamps = t.timestamps.filter(ts => ts > now - 10000);
-  t.current = t.timestamps.filter(ts => ts > now - 1000).length;
-  t.history.push(t.current);
-  if (t.history.length > 10) t.history.shift();
-  t.avg = t.history.length ? t.history.reduce((a, b) => a + b, 0) / t.history.length : 0;
+  t.timestamps.push(now);
+  
+  // Prune old timestamps to prevent memory growth
+  // Keep only timestamps within MAX_TIMESTAMP_AGE_MS
+  const cutoff = now - MAX_TIMESTAMP_AGE_MS;
+  while (t.timestamps.length > 0 && t.timestamps[0] < cutoff) {
+    t.timestamps.shift();
+  }
 }
 
-setInterval(() => {
-  for (const sym of rateTrackers.keys()) updateRates(sym);
-}, 1000);
+/**
+ * Get real-time OPS using sliding window
+ * Counts trades in the last SLIDING_WINDOW_MS milliseconds
+ */
+function getCurrentOPS(symbol: string): number {
+  const t = getRateTracker(symbol);
+  const now = Date.now();
+  const windowStart = now - SLIDING_WINDOW_MS;
+  
+  // Count timestamps within the sliding window
+  // Binary search would be faster for large arrays, but linear is fine for typical trade rates
+  let count = 0;
+  for (let i = t.timestamps.length - 1; i >= 0; i--) {
+    if (t.timestamps[i] >= windowStart) {
+      count++;
+    } else {
+      break; // Timestamps are ordered, so we can stop early
+    }
+  }
+  return count;
+}
 
+/**
+ * Update the rolling average (called periodically, not on every trade)
+ */
+function updateRollingAverage(symbol: string): void {
+  const t = getRateTracker(symbol);
+  const currentOPS = getCurrentOPS(symbol);
+  
+  t.history.push(currentOPS);
+  if (t.history.length > MAX_HISTORY_SAMPLES) {
+    t.history.shift();
+  }
+  t.lastSampleTime = Date.now();
+}
+
+// Update rolling averages every 500ms (more frequent than before for smoother display)
+setInterval(() => {
+  for (const sym of rateTrackers.keys()) {
+    updateRollingAverage(sym);
+  }
+}, 500);
+
+/**
+ * Get trade rate statistics with real-time sliding window OPS
+ */
 export function getTradeRate(symbol: string) {
   const t = getRateTracker(symbol);
-  return { current: t.current, avg: t.avg, history: [...t.history] };
+  const current = getCurrentOPS(symbol); // Real-time sliding window count
+  const avg = t.history.length > 0 
+    ? t.history.reduce((a, b) => a + b, 0) / t.history.length 
+    : current;
+  
+  return { 
+    current,  // Exact count of trades in last 1000ms
+    avg,      // Moving average over last 10 samples
+    history: [...t.history] 
+  };
 }
 
 export function resetTradeRateTracker(symbol: string): void {
