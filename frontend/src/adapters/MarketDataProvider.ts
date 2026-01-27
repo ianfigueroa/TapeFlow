@@ -29,6 +29,10 @@ export interface SimulationTelemetry {
   price: number;
   high: number;
   low: number;
+  vwap: number;
+  cumulativeDelta: number;
+  buyVolume: number;
+  sellVolume: number;
   bestBid: number;
   bestAsk: number;
   spread: number;
@@ -36,6 +40,7 @@ export interface SimulationTelemetry {
   ordersPerSecond: number;
   totalOrders: number;
   totalTrades: number;
+  volatility: number;
   bids: { price: number; size: number }[];
   asks: { price: number; size: number }[];
 }
