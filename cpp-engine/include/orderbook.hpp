@@ -9,6 +9,7 @@
 #include <vector>
 #include <functional>
 #include <chrono>
+#include <mutex>
 
 namespace hyperion
 {
@@ -28,6 +29,7 @@ namespace hyperion
         // Returns order ID (0 if fully filled immediately)
         uint64_t addOrder(Side side, double price, double quantity)
         {
+            std::lock_guard<std::mutex> lock(bookMutex_);
             auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
             Order order(nextOrderId_++, side, price, quantity, now);
 
@@ -47,6 +49,7 @@ namespace hyperion
         // Cancel order by ID
         bool cancelOrder(uint64_t orderId)
         {
+            std::lock_guard<std::mutex> lock(bookMutex_);
             auto it = orderIndex_.find(orderId);
             if (it == orderIndex_.end())
                 return false;
@@ -112,6 +115,7 @@ namespace hyperion
         // Get top N levels for each side
         std::vector<std::pair<double, double>> getTopBids(size_t n) const
         {
+            std::lock_guard<std::mutex> lock(bookMutex_);
             std::vector<std::pair<double, double>> result;
             result.reserve(n);
             size_t count = 0;
@@ -129,6 +133,7 @@ namespace hyperion
 
         std::vector<std::pair<double, double>> getTopAsks(size_t n) const
         {
+            std::lock_guard<std::mutex> lock(bookMutex_);
             std::vector<std::pair<double, double>> result;
             result.reserve(n);
             size_t count = 0;
@@ -178,6 +183,7 @@ namespace hyperion
         std::string symbol_;
         uint64_t nextOrderId_;
         uint64_t tradeCount_ = 0;
+        mutable std::mutex bookMutex_; // Protects concurrent access
         double lastPrice_;
         TradeCallback tradeCallback_;
 

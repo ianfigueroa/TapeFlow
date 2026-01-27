@@ -104,6 +104,9 @@ namespace hyperion
         double realizedVolatility_ = 0.0002; // ~2 bps per tick
         std::deque<double> priceHistory_;
         std::deque<uint64_t> pendingOrderIds_;
+        
+        // Rolling OPS calculation (more accurate than cumulative average)
+        std::deque<std::pair<uint64_t, std::chrono::high_resolution_clock::time_point>> opsWindow_;
 
         // Order flow imbalance tracking
         double buyPressure_ = 0.5;
@@ -121,8 +124,10 @@ namespace hyperion
             auto startTime = std::chrono::high_resolution_clock::now();
             uint64_t orderCount = 0;
             uint64_t lastCallback = 0;
+            uint64_t lastCleanup = 0;
 
             constexpr uint64_t BATCH_SIZE = 10000;
+            constexpr uint64_t CLEANUP_INTERVAL = 100000; // Cleanup every 100k orders
 
             while (stats_.running)
             {
@@ -136,8 +141,8 @@ namespace hyperion
                     // Generate order based on trader persona
                     generateHumanLikeOrder(trader);
 
-                    // Occasionally cancel old orders (realistic behavior)
-                    if (uniformDist_(rng_) < 0.15 && !pendingOrderIds_.empty())
+                    // Cancel old orders more aggressively (50% chance per order)
+                    if (uniformDist_(rng_) < 0.50 && !pendingOrderIds_.empty())
                     {
                         cancelOldOrders();
                     }
@@ -155,14 +160,35 @@ namespace hyperion
                 // Update volatility estimate
                 updateVolatility();
 
-                auto batchEnd = std::chrono::high_resolution_clock::now();
-                auto elapsed = std::chrono::duration<double>(batchEnd - startTime).count();
-
-                if (elapsed > 0)
+                // Periodic cleanup to prevent memory bloat
+                if (orderCount - lastCleanup > CLEANUP_INTERVAL)
                 {
-                    stats_.ordersPerSecond = static_cast<double>(orderCount) / elapsed;
+                    cleanupStaleOrders();
+                    lastCleanup = orderCount;
                 }
 
+                auto batchEnd = std::chrono::high_resolution_clock::now();
+                
+                // Rolling OPS calculation (last 2 seconds window)
+                opsWindow_.push_back({orderCount, batchEnd});
+                while (!opsWindow_.empty()) {
+                    auto age = std::chrono::duration<double>(batchEnd - opsWindow_.front().second).count();
+                    if (age > 2.0) {
+                        opsWindow_.pop_front();
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (opsWindow_.size() >= 2) {
+                    uint64_t ordersInWindow = orderCount - opsWindow_.front().first;
+                    double windowTime = std::chrono::duration<double>(batchEnd - opsWindow_.front().second).count();
+                    if (windowTime > 0.1) {
+                        stats_.ordersPerSecond = static_cast<double>(ordersInWindow) / windowTime;
+                    }
+                }
+
+                auto elapsed = std::chrono::duration<double>(batchEnd - startTime).count();
                 double expectedTime = static_cast<double>(orderCount) / targetOPS_;
                 if (elapsed < expectedTime)
                 {
@@ -262,7 +288,7 @@ namespace hyperion
             uint64_t orderId = book_.addOrder(side, price, size);
 
             // Track orders for potential cancellation (if not immediately filled)
-            if (orderId > 0 && pendingOrderIds_.size() < 10000)
+            if (orderId > 0 && pendingOrderIds_.size() < 50000)
             {
                 pendingOrderIds_.push_back(orderId);
             }
@@ -397,14 +423,29 @@ namespace hyperion
 
         void cancelOldOrders()
         {
-            // Cancel ~30% of tracked orders (realistic cancel rate)
-            size_t toCancel = std::min(pendingOrderIds_.size(), static_cast<size_t>(3));
+            // Cancel more aggressively to keep book size manageable
+            size_t toCancel = std::min(pendingOrderIds_.size(), static_cast<size_t>(10));
 
             for (size_t i = 0; i < toCancel && !pendingOrderIds_.empty(); ++i)
             {
                 uint64_t orderId = pendingOrderIds_.front();
                 pendingOrderIds_.pop_front();
 
+                if (book_.cancelOrder(orderId))
+                {
+                    stats_.ordersCancelled++;
+                }
+            }
+        }
+        
+        void cleanupStaleOrders()
+        {
+            // Aggressively cancel old orders to prevent memory bloat
+            size_t targetSize = 1000; // Keep only recent 1000 orders tracked
+            while (pendingOrderIds_.size() > targetSize)
+            {
+                uint64_t orderId = pendingOrderIds_.front();
+                pendingOrderIds_.pop_front();
                 if (book_.cancelOrder(orderId))
                 {
                     stats_.ordersCancelled++;
