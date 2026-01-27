@@ -4,6 +4,12 @@ export type AssetType = 'crypto';
 
 export type TradeSide = 'buy' | 'sell' | 'neutral';
 
+/** Type of trade - regular trade or forced liquidation */
+export type TradeType = 'trade' | 'liquidation';
+
+/** For liquidations, which side was liquidated */
+export type LiquidationSide = 'long' | 'short';
+
 export interface Trade {
   id: string;
   symbol: string;
@@ -13,6 +19,12 @@ export interface Trade {
   volume: number;
   side: TradeSide;
   exchange?: string;
+  /** Whether this is a forced liquidation */
+  isLiquidation?: boolean;
+  /** Type of trade for filtering */
+  tradeType?: TradeType;
+  /** Which side was liquidated (long = buyer liquidated, short = seller liquidated) */
+  liquidationSide?: LiquidationSide;
 }
 
 /**
@@ -81,6 +93,10 @@ export interface TradeWithAnalytics extends Trade {
   relativeStrength: number;  // Buy volume as % of total volume
   momentum: number;       // Recent price trend direction
   spreadAtPrint: number;  // Spread at time of trade (if available)
+  // Liquidation fields inherited from Trade:
+  // isLiquidation?: boolean;
+  // tradeType?: TradeType;
+  // liquidationSide?: LiquidationSide;
 }
 
 /**
