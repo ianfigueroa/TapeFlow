@@ -198,7 +198,7 @@ export function PriceChart({
         `VWAP: ${lastPoint.vwap.toFixed(2)}`,
         width - 2,
         vwapY + 12,
-        colors.vwapLineColor,
+        '#F59E0B',  // Amber color to match the dashed VWAP line
         '10px monospace',
         'right',
         'rgba(0, 0, 0, 0.75)'
