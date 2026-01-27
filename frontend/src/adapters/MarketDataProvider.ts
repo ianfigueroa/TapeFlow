@@ -63,6 +63,7 @@ export class SimulationAdapter implements MarketDataProvider {
   private connectionCallbacks: Set<(connected: boolean) => void> = new Set();
   
   private lastTradeId = 0;
+  private targetSymbol: string = 'BTCUSDT'; // Symbol to emit data as
   
   constructor(url = 'ws://localhost:9001') {
     this.url = url;
@@ -70,6 +71,15 @@ export class SimulationAdapter implements MarketDataProvider {
   
   get isConnected(): boolean {
     return this._isConnected;
+  }
+  
+  // Set the target symbol - redirects all sim data to this symbol
+  setTargetSymbol(symbol: string): void {
+    this.targetSymbol = symbol.toUpperCase();
+  }
+  
+  getTargetSymbol(): string {
+    return this.targetSymbol;
   }
   
   async connect(): Promise<void> {
@@ -157,6 +167,9 @@ export class SimulationAdapter implements MarketDataProvider {
       
       if (telemetry.type !== 'telemetry') return;
       
+      // Use target symbol instead of telemetry symbol so data goes to selected tab
+      const symbol = this.targetSymbol;
+      
       // Generate burst of trades to simulate high-frequency flow
       // Engine runs at ~960K orders/sec, we emit 10-30 trades per tick (50ms)
       // This gives ~200-600 trades/sec on the frontend (realistic display rate)
@@ -181,7 +194,7 @@ export class SimulationAdapter implements MarketDataProvider {
         
         const trade: Trade = {
           id: `sim-${++this.lastTradeId}`,
-          symbol: telemetry.symbol,
+          symbol: symbol,
           assetType: 'crypto',
           timestamp: telemetry.timestamp + i, // Stagger timestamps
           price: Math.round(tradePrice * 100) / 100,
@@ -196,7 +209,7 @@ export class SimulationAdapter implements MarketDataProvider {
       const spreadPercent = telemetry.bestBid > 0 ? (spread / telemetry.bestBid) * 100 : 0;
       
       const orderBook: OrderBook = {
-        symbol: telemetry.symbol,
+        symbol: symbol,
         assetType: 'crypto',
         timestamp: telemetry.timestamp,
         bids: telemetry.bids.map(b => ({ price: b.price, size: b.size })),
@@ -209,7 +222,7 @@ export class SimulationAdapter implements MarketDataProvider {
       // Convert to Ticker
       const startPrice = 92000;
       const ticker: Ticker = {
-        symbol: telemetry.symbol,
+        symbol: symbol,
         assetType: 'crypto',
         timestamp: telemetry.timestamp,
         lastPrice: telemetry.price,

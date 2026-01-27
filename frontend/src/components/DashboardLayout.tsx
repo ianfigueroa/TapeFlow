@@ -111,6 +111,10 @@ export function DashboardLayout() {
       try {
         await adapter.connect();
         
+        // Set target symbol to currently selected symbol (or BTCUSDT default)
+        const currentSymbol = useMarketStore.getState().selectedSymbol || 'BTCUSDT';
+        adapter.setTargetSymbol(currentSymbol);
+        
         // Wire up callbacks to inject simulation data into store
         adapter.onTrade((trade) => {
           handleTrade(trade);
@@ -151,6 +155,15 @@ export function DashboardLayout() {
   const updateSettings = useMarketStore((state) => state.updateSettings);
   const combinedTrades = useMarketStore((state) => state.combinedTrades);
   const clearTrades = useMarketStore((state) => state.clearTrades);
+
+  // Update sim adapter target symbol when selected symbol changes
+  useEffect(() => {
+    if (dataMode === 'SIM' && simAdapterRef.current && selectedSymbol) {
+      simAdapterRef.current.setTargetSymbol(selectedSymbol);
+      // Clear trades for the new symbol so we start fresh
+      clearTrades(selectedSymbol);
+    }
+  }, [selectedSymbol, dataMode, clearTrades]);
 
   const currentSymbolData = selectedSymbol ? symbols.get(selectedSymbol) : null;
   const orderBookWidth = Math.min(Math.max(windowSize.width * 0.35, 400), 600);
