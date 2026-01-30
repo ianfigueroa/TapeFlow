@@ -28,6 +28,7 @@ export interface VisualizationSettings {
   showDeltaChart: boolean;
   showVwapLine: boolean;
   showHeatmap: boolean;    // Order book depth heatmap
+  showFootprint: boolean;  // Footprint cluster chart
   chartHeight: number;  // pixels
 }
 
@@ -77,6 +78,7 @@ const defaultVisualization: VisualizationSettings = {
   showDeltaChart: true,
   showVwapLine: true,
   showHeatmap: true,
+  showFootprint: false,
   chartHeight: 200,
 };
 

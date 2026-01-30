@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { PriceChart, type PriceDataPoint } from './PriceChart';
 import { DeltaChart, type DeltaDataPoint } from './DeltaChart';
+import { FootprintChart } from './FootprintChart';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { getDisplayTrades } from '../services/dataBuffer';
 import type { TradeWithAnalytics } from '../types';
@@ -93,7 +94,7 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
     return { priceData: pricePoints, deltaData: deltaPoints };
   }, [trades]);
 
-  const showAnyChart = visualization.showPriceChart || visualization.showVolumeChart || visualization.showDeltaChart;
+  const showAnyChart = visualization.showPriceChart || visualization.showVolumeChart || visualization.showDeltaChart || visualization.showFootprint;
 
   if (!showAnyChart) {
     return null;
@@ -130,6 +131,23 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
             data={deltaData}
             width={width - 16}
             height={Math.floor(visualization.chartHeight * 0.75)}
+          />
+        </div>
+      )}
+
+      {visualization.showFootprint && (
+        <div className="bg-black rounded border border-gray-800 p-2">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-mono text-gray-500 uppercase">
+              Footprint (Bid x Ask)
+            </span>
+          </div>
+          <FootprintChart
+            trades={trades}
+            symbol={symbol || ''}
+            width={width - 16}
+            height={visualization.chartHeight}
+            clusterIntervalMs={60000}
           />
         </div>
       )}
