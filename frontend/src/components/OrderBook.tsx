@@ -8,7 +8,7 @@ import { calculateOrderBookImbalance, getMidPrice } from '../utils/calculations'
 import { globalClock } from '../services/globalClock';
 import { flushOrderBookBuffer } from '../services/dataBuffer';
 
-const RENDER_INTERVAL_MS = 100;
+const RENDER_INTERVAL_MS = 50;
 
 interface OrderBookProps {
   orderBook: OrderBookType | null;

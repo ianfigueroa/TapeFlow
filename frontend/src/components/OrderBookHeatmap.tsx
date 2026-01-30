@@ -85,20 +85,15 @@ function interpolateColor(intensity: number): string {
   const t = Math.max(0, Math.min(1, intensity));
   
   if (t < 0.01) return HEATMAP_COLORS.empty;
-  if (t < 0.25) {
-    // Empty to low
-    return lerpColor(HEATMAP_COLORS.empty, HEATMAP_COLORS.low, t / 0.25);
+  // Apply minimum visibility floor - shift scale so low values are visible
+  const adjustedT = 0.15 + t * 0.85;
+  if (adjustedT < 0.33) {
+    return lerpColor(HEATMAP_COLORS.low, HEATMAP_COLORS.medium, adjustedT / 0.33);
   }
-  if (t < 0.5) {
-    // Low to medium
-    return lerpColor(HEATMAP_COLORS.low, HEATMAP_COLORS.medium, (t - 0.25) / 0.25);
+  if (adjustedT < 0.66) {
+    return lerpColor(HEATMAP_COLORS.medium, HEATMAP_COLORS.high, (adjustedT - 0.33) / 0.33);
   }
-  if (t < 0.75) {
-    // Medium to high
-    return lerpColor(HEATMAP_COLORS.medium, HEATMAP_COLORS.high, (t - 0.5) / 0.25);
-  }
-  // High to max (walls)
-  return lerpColor(HEATMAP_COLORS.high, HEATMAP_COLORS.max, (t - 0.75) / 0.25);
+  return lerpColor(HEATMAP_COLORS.high, HEATMAP_COLORS.max, (adjustedT - 0.66) / 0.34);
 }
 
 /**
@@ -260,8 +255,10 @@ export function OrderBookHeatmap({
           }
         }
         
-        // Calculate intensity (0-1)
-        const intensity = Math.min(size / maxSize, 1);
+        // Calculate intensity (0-1) using log scaling for visibility
+        const logSize = size > 0 ? Math.log10(size + 1) : 0;
+        const logMax = maxSize > 0 ? Math.log10(maxSize + 1) : 1;
+        const intensity = Math.min(logSize / logMax, 1);
         
         // Get color from intensity
         ctx.fillStyle = interpolateColor(intensity);
