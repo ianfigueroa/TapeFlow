@@ -1,4 +1,3 @@
-import type { Trade, OrderBook } from '../../types';
 import type {
   DataSource,
   DataSourceCallbacks,
