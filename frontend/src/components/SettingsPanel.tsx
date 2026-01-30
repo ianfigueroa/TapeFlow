@@ -223,6 +223,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               checked={visualization.showHeatmap}
               onChange={(checked) => updateVisualization({ showHeatmap: checked })}
             />
+            <Toggle
+              label="Show Footprint Chart"
+              checked={visualization.showFootprint}
+              onChange={(checked) => updateVisualization({ showFootprint: checked })}
+            />
 
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-300">Chart Height (px)</span>
