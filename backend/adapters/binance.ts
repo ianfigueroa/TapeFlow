@@ -205,7 +205,7 @@ export class BinanceAdapter extends BaseAdapter {
       liquidationSide,
     };
     
-    console.log(`[Binance] 💀 Liquidation: ${liquidationSide.toUpperCase()} ${trade.symbol} @ ${trade.price} x ${trade.volume}`);
+    console.log(`[Binance] LIQUIDATION: ${liquidationSide.toUpperCase()} ${trade.symbol} @ ${trade.price} x ${trade.volume}`);
     this.emitTrade(trade);
   }
 
