@@ -1,4 +1,4 @@
-import type { Trade, OrderBook, OrderBookLevel, TradeWithAnalytics } from '../types';
+import type { OrderBook, OrderBookLevel, TradeWithAnalytics } from '../types';
 
 export interface OrderBookSnapshot {
   timestamp: number;

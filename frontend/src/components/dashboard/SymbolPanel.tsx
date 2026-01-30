@@ -115,8 +115,7 @@ export function SymbolPanel({ symbol, width, height, compact = false }: SymbolPa
         <AlgoSignals
           symbol={symbolData.symbol}
           velocitySpike={300}
-          className="flex-none"
-          style={{ height: 120 }}
+          className="flex-none h-[120px]"
         />
 
         <div

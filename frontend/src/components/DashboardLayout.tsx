@@ -13,6 +13,8 @@ import { RealTimeClock } from './RealTimeClock';
 import { ModeToggle, type DataMode } from './ModeToggle';
 import { SettingsPanel } from './SettingsPanel';
 import { ChartPanel } from './ChartPanel';
+import { PaperTradingPanel } from './controls/PaperTradingPanel';
+import { ReplayControls } from './controls/ReplayControls';
 import { useMarketStore } from '../stores/useMarketStore';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -56,9 +58,23 @@ const SettingsIcon = () => (
   </svg>
 );
 
+const DollarIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const RewindIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
+  </svg>
+);
+
 export function DashboardLayout() {
   const [showSymbolSelector, setShowSymbolSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showPaperTrading, setShowPaperTrading] = useState(false);
+  const [showReplay, setShowReplay] = useState(false);
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [dataMode, setDataMode] = useState<DataMode>('LIVE');
   const [simConnected, setSimConnected] = useState(false);
@@ -253,6 +269,32 @@ export function DashboardLayout() {
             </button>
 
             <button
+              onClick={() => setShowPaperTrading(!showPaperTrading)}
+              className={cn(
+                "p-2 rounded border transition-colors",
+                showPaperTrading
+                  ? "bg-black border-[#A855F7] text-[#A855F7]"
+                  : "bg-black border-gray-800 text-gray-600 hover:text-gray-400 hover:border-gray-700"
+              )}
+              title="Paper Trading"
+            >
+              <DollarIcon />
+            </button>
+
+            <button
+              onClick={() => setShowReplay(!showReplay)}
+              className={cn(
+                "p-2 rounded border transition-colors",
+                showReplay
+                  ? "bg-black border-cyan-500 text-cyan-500"
+                  : "bg-black border-gray-800 text-gray-600 hover:text-gray-400 hover:border-gray-700"
+              )}
+              title="Replay Controls"
+            >
+              <RewindIcon />
+            </button>
+
+            <button
               onClick={() => setShowSettings(!showSettings)}
               className="p-2 rounded border bg-black border-gray-800 text-gray-600 hover:text-gray-400 hover:border-gray-700 transition-colors"
               title="Settings"
@@ -425,6 +467,27 @@ export function DashboardLayout() {
       {showSettings && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
           <SettingsPanel onClose={() => setShowSettings(false)} />
+        </div>
+      )}
+
+      {showPaperTrading && currentSymbolData && (
+        <div className="fixed top-24 right-4 z-40">
+          <PaperTradingPanel
+            symbol={currentSymbolData.symbol}
+            currentPrice={currentSymbolData.lastPrice}
+            bestBid={currentSymbolData.orderBook?.bids[0]?.price || 0}
+            bestAsk={currentSymbolData.orderBook?.asks[0]?.price || 0}
+            onClose={() => setShowPaperTrading(false)}
+          />
+        </div>
+      )}
+
+      {showReplay && currentSymbolData && (
+        <div className="fixed bottom-4 left-4 z-40">
+          <ReplayControls
+            symbol={currentSymbolData.symbol}
+            className="w-80"
+          />
         </div>
       )}
     </div>
