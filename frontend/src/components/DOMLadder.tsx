@@ -1,5 +1,5 @@
 /**
- * DOMLadder - Depth of Market Ladder
+ * DOMLadder - Interactive Depth of Market Ladder
  * 
  * Professional-style DOM ladder showing:
  * - Order book depth at each price level
@@ -7,11 +7,15 @@
  * - Price ladder centered on current price
  * - Cumulative depth
  * - Large order highlighting
+ * - ONE-CLICK ORDER ENTRY (click bid/ask columns to place orders)
+ * - Working order highlighting
  */
 
-import { useState, useEffect, useRef, memo, useMemo } from 'react';
+import { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { cn } from '../lib/utils';
 import { subscribeToTrades, getCurrentOrderBook } from '../services/dataBuffer';
+import { usePaperTradingStore } from '../stores/usePaperTradingStore';
+import { LabelWithTooltip } from './Tooltip';
 import type { Trade, OrderBook } from '../types';
 
 interface DOMLadderProps {
@@ -42,7 +46,7 @@ function isLargeOrder(size: number, avgSize: number): boolean {
   return size > avgSize * 3;
 }
 
-// DOM level row component
+// Interactive DOM level row component
 function DOMLevel({
   price,
   bidSize,
@@ -50,6 +54,10 @@ function DOMLevel({
   maxSize,
   isCurrentPrice,
   avgSize,
+  workingBidSize,
+  workingAskSize,
+  onBidClick,
+  onAskClick,
 }: {
   price: number;
   bidSize: number;
@@ -57,6 +65,10 @@ function DOMLevel({
   maxSize: number;
   isCurrentPrice: boolean;
   avgSize: number;
+  workingBidSize?: number;
+  workingAskSize?: number;
+  onBidClick?: (price: number) => void;
+  onAskClick?: (price: number) => void;
 }) {
   const bidWidth = maxSize > 0 ? (bidSize / maxSize) * 100 : 0;
   const askWidth = maxSize > 0 ? (askSize / maxSize) * 100 : 0;
@@ -64,12 +76,28 @@ function DOMLevel({
   const isLargeBid = bidSize > 0 && isLargeOrder(bidSize, avgSize);
   const isLargeAsk = askSize > 0 && isLargeOrder(askSize, avgSize);
   
+  const hasWorkingBid = (workingBidSize || 0) > 0;
+  const hasWorkingAsk = (workingAskSize || 0) > 0;
+  
   return (
     <div className={cn(
-      "grid grid-cols-[1fr_80px_1fr] items-center h-6 text-xs border-b border-gray-800/30",
+      "grid grid-cols-[40px_1fr_70px_1fr_40px] items-center h-7 text-xs border-b border-gray-800/30",
       isCurrentPrice && "bg-blue-500/10 border-blue-500/30"
     )}>
-      {/* Bid side */}
+      {/* Buy button column */}
+      <button
+        onClick={() => onBidClick?.(price)}
+        className={cn(
+          "h-full flex items-center justify-center transition-colors text-[10px] font-bold",
+          "hover:bg-[#00FF41]/30 active:bg-[#00FF41]/50",
+          hasWorkingBid ? "bg-[#00FF41]/20 text-[#00FF41]" : "text-[#00FF41]/60"
+        )}
+        title={`Buy at ${formatPrice(price)}`}
+      >
+        {hasWorkingBid ? formatSize(workingBidSize!) : 'BUY'}
+      </button>
+      
+      {/* Bid size / depth */}
       <div className="relative h-full flex items-center justify-end pr-2">
         {/* Background bar */}
         <div 
@@ -92,13 +120,13 @@ function DOMLevel({
       
       {/* Price */}
       <div className={cn(
-        "text-center tabular-nums font-medium px-2 border-x border-gray-800/50",
+        "text-center tabular-nums font-medium px-1 border-x border-gray-800/50",
         isCurrentPrice ? "text-white bg-blue-500/20" : "text-gray-400"
       )}>
         {formatPrice(price)}
       </div>
       
-      {/* Ask side */}
+      {/* Ask size / depth */}
       <div className="relative h-full flex items-center pl-2">
         {/* Background bar */}
         <div 
@@ -118,6 +146,19 @@ function DOMLevel({
           </span>
         )}
       </div>
+      
+      {/* Sell button column */}
+      <button
+        onClick={() => onAskClick?.(price)}
+        className={cn(
+          "h-full flex items-center justify-center transition-colors text-[10px] font-bold",
+          "hover:bg-[#FF4545]/30 active:bg-[#FF4545]/50",
+          hasWorkingAsk ? "bg-[#FF4545]/20 text-[#FF4545]" : "text-[#FF4545]/60"
+        )}
+        title={`Sell at ${formatPrice(price)}`}
+      >
+        {hasWorkingAsk ? formatSize(workingAskSize!) : 'SELL'}
+      </button>
     </div>
   );
 }
@@ -130,8 +171,44 @@ export const DOMLadder = memo(function DOMLadder({
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
   const [currentPrice, setCurrentPrice] = useState(0);
   const [isExpanded, setIsExpanded] = useState(true);
+  const [orderSize, setOrderSize] = useState(0.01); // Default order size
+  const [tickSize, setTickSize] = useState<number | null>(null); // null = auto
   
   const currentSymbolRef = useRef<string>(symbol);
+  
+  // Paper trading store
+  const placeOrder = usePaperTradingStore((state) => state.placeOrder);
+  const openOrders = usePaperTradingStore((state) => state.openOrders);
+  
+  // Get working orders at each price level
+  const workingOrders = useMemo(() => {
+    const bidOrders = new Map<string, number>();
+    const askOrders = new Map<string, number>();
+    
+    openOrders
+      .filter(o => o.symbol === symbol && o.type === 'limit')
+      .forEach(order => {
+        if (order.price === undefined) return;
+        const key = order.price.toFixed(8);
+        if (order.side === 'buy') {
+          bidOrders.set(key, (bidOrders.get(key) || 0) + order.quantity);
+        } else {
+          askOrders.set(key, (askOrders.get(key) || 0) + order.quantity);
+        }
+      });
+    
+    return { bidOrders, askOrders };
+  }, [openOrders, symbol]);
+  
+  // Handle buy click - place limit buy order
+  const handleBuyClick = useCallback((price: number) => {
+    placeOrder(symbol, 'buy', 'limit', orderSize, price);
+  }, [symbol, orderSize, placeOrder]);
+  
+  // Handle sell click - place limit sell order
+  const handleSellClick = useCallback((price: number) => {
+    placeOrder(symbol, 'sell', 'limit', orderSize, price);
+  }, [symbol, orderSize, placeOrder]);
   
   // Reset on symbol change
   useEffect(() => {
@@ -170,28 +247,44 @@ export const DOMLadder = memo(function DOMLadder({
   const ladder = useMemo(() => {
     if (!orderBook || currentPrice === 0) return [];
     
-    // Determine tick size
-    let tickSize = 0.01;
-    const upperSymbol = symbol.toUpperCase();
-    if (upperSymbol.includes('BTC')) tickSize = 1;
-    else if (upperSymbol.includes('ETH')) tickSize = 0.1;
-    else if (upperSymbol.includes('SOL')) tickSize = 0.01;
+    // Determine tick size - use manual setting if set, otherwise auto-detect
+    // Use smaller ticks to ensure order book levels fall into our buckets
+    let actualTickSize = tickSize;
+    if (actualTickSize === null) {
+      // Auto-detect based on symbol - use smallest practical tick size
+      const upperSymbol = symbol.toUpperCase();
+      if (upperSymbol.includes('BTC')) actualTickSize = 0.1;  // Reduced from 1
+      else if (upperSymbol.includes('ETH')) actualTickSize = 0.01;  // Reduced from 0.1
+      else if (upperSymbol.includes('SOL')) actualTickSize = 0.001;  // Reduced from 0.01
+      else if (currentPrice >= 10000) actualTickSize = 0.1;
+      else if (currentPrice >= 1000) actualTickSize = 0.01;
+      else if (currentPrice >= 100) actualTickSize = 0.001;
+      else actualTickSize = 0.0001;
+    }
     
     // Create price ladder centered on current price
     const halfLevels = Math.floor(levels / 2);
-    const startPrice = Math.round(currentPrice / tickSize) * tickSize + (halfLevels * tickSize);
+    const startPrice = Math.round(currentPrice / actualTickSize) * actualTickSize + (halfLevels * actualTickSize);
     
-    // Build bid/ask maps for O(1) lookup
+    // Build bid/ask maps for O(1) lookup - use precise rounding
     const bidMap = new Map<string, number>();
     const askMap = new Map<string, number>();
     
+    // Round prices to tick size for aggregation
+    const roundToTick = (price: number) => {
+      const rounded = Math.round(price / actualTickSize) * actualTickSize;
+      // Use fixed precision based on tick size to avoid floating point issues
+      const decimals = Math.max(0, -Math.floor(Math.log10(actualTickSize)));
+      return rounded.toFixed(decimals);
+    };
+    
     orderBook.bids.forEach(level => {
-      const key = (Math.round(level.price / tickSize) * tickSize).toFixed(8);
+      const key = roundToTick(level.price);
       bidMap.set(key, (bidMap.get(key) || 0) + level.size);
     });
     
     orderBook.asks.forEach(level => {
-      const key = (Math.round(level.price / tickSize) * tickSize).toFixed(8);
+      const key = roundToTick(level.price);
       askMap.set(key, (askMap.get(key) || 0) + level.size);
     });
     
@@ -208,8 +301,8 @@ export const DOMLadder = memo(function DOMLadder({
     let cumulativeAsk = 0;
     
     for (let i = 0; i < levels; i++) {
-      const price = startPrice - (i * tickSize);
-      const key = price.toFixed(8);
+      const price = startPrice - (i * actualTickSize);
+      const key = roundToTick(price);
       const bidSize = bidMap.get(key) || 0;
       const askSize = askMap.get(key) || 0;
       
@@ -230,7 +323,7 @@ export const DOMLadder = memo(function DOMLadder({
     }
     
     return result;
-  }, [orderBook, currentPrice, symbol, levels]);
+  }, [orderBook, currentPrice, symbol, levels, tickSize]);
   
   // Calculate stats
   const stats = useMemo(() => {
@@ -263,14 +356,45 @@ export const DOMLadder = memo(function DOMLadder({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs text-orange-500 uppercase">&gt;&gt; DOM LADDER</span>
+          <span className="text-xs text-orange-500 uppercase">&gt;&gt; <LabelWithTooltip label="DOM LADDER" term="DOM" /></span>
           {orderBook && (
             <span className="text-[10px] text-gray-600">
-              Spread: {orderBook.spread.toFixed(2)}
+              <LabelWithTooltip label="Spread" term="Spread" />: {orderBook.spread.toFixed(2)}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Tick size selector */}
+          <select
+            value={tickSize === null ? 'auto' : tickSize.toString()}
+            onChange={(e) => setTickSize(e.target.value === 'auto' ? null : parseFloat(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-gray-800 text-gray-300 text-[10px] px-1 py-0.5 rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+            title="Tick Size"
+          >
+            <option value="auto">Auto</option>
+            <option value="0.01">0.01</option>
+            <option value="0.1">0.10</option>
+            <option value="1">1.00</option>
+            <option value="5">5.00</option>
+            <option value="10">10.00</option>
+            <option value="50">50.00</option>
+            <option value="100">100.00</option>
+          </select>
+          {/* Order size selector */}
+          <select
+            value={orderSize}
+            onChange={(e) => setOrderSize(parseFloat(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-gray-800 text-gray-300 text-[10px] px-1 py-0.5 rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+            title="Order Size"
+          >
+            <option value={0.001}>0.001</option>
+            <option value={0.01}>0.01</option>
+            <option value={0.1}>0.1</option>
+            <option value={1}>1.0</option>
+            <option value={10}>10</option>
+          </select>
           {/* Imbalance indicator */}
           <div className={cn(
             "px-1.5 py-0.5 text-[10px] rounded",
@@ -299,10 +423,12 @@ export const DOMLadder = memo(function DOMLadder({
       
       {/* Column headers */}
       {isExpanded && (
-        <div className="grid grid-cols-[1fr_80px_1fr] px-0 py-1 border-b border-gray-800/50 text-[9px] text-gray-600 uppercase">
-          <div className="text-right pr-2">Bid Size</div>
+        <div className="grid grid-cols-[40px_1fr_70px_1fr_40px] px-0 py-1 border-b border-gray-800/50 text-[9px] text-gray-600 uppercase">
+          <div className="text-center text-[#00FF41]/60">BUY</div>
+          <div className="text-right pr-2">Bid</div>
           <div className="text-center">Price</div>
-          <div className="text-left pl-2">Ask Size</div>
+          <div className="text-left pl-2">Ask</div>
+          <div className="text-center text-[#FF4545]/60">SELL</div>
         </div>
       )}
       
@@ -319,6 +445,10 @@ export const DOMLadder = memo(function DOMLadder({
                 maxSize={maxSize}
                 isCurrentPrice={Math.abs(level.price - currentPrice) / currentPrice < 0.0005}
                 avgSize={stats.avgSize}
+                workingBidSize={workingOrders.bidOrders.get(level.price.toFixed(8))}
+                workingAskSize={workingOrders.askOrders.get(level.price.toFixed(8))}
+                onBidClick={handleBuyClick}
+                onAskClick={handleSellClick}
               />
             ))
           ) : (

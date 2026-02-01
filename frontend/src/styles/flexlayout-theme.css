@@ -1,0 +1,213 @@
+/**
+ * TapeFlow FlexLayout Theme Overrides
+ * Terminal-style dark theme matching the rest of the app
+ * Uses CSS variables for theme support
+ */
+
+/* ============================================================================
+   FLEXLAYOUT-REACT THEME OVERRIDES
+   Override default dark theme with TapeFlow terminal colors
+   ============================================================================ */
+
+/* Root container */
+.flexlayout__layout {
+  background-color: var(--tf-bg-primary, #000000) !important;
+  color: var(--tf-text-primary, #ffffff) !important;
+  font-family: var(--tf-font-mono, 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace) !important;
+  position: relative !important;
+  z-index: 1 !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Splitter (divider between panels) */
+.flexlayout__splitter {
+  background-color: var(--tf-border-primary, #1a1a1a) !important;
+}
+
+.flexlayout__splitter:hover {
+  background-color: var(--tf-accent-primary, #00FF00) !important;
+  transition: background-color 0.15s ease;
+}
+
+.flexlayout__splitter_drag {
+  background-color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+/* Tab strip (header with tabs) */
+.flexlayout__tabset {
+  background-color: var(--tf-bg-secondary, #0a0a0a) !important;
+  border: 1px solid var(--tf-border-primary, #1f1f1f) !important;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.flexlayout__tabset_tabbar_outer {
+  background-color: var(--tf-bg-tertiary, #0d0d0d) !important;
+  border-bottom: 1px solid var(--tf-border-primary, #1f1f1f) !important;
+}
+
+.flexlayout__tabset_tabbar_inner {
+  padding: 0 4px;
+}
+
+/* Individual tabs */
+.flexlayout__tab_button {
+  background-color: transparent !important;
+  color: var(--tf-text-muted, #666666) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 4px 12px !important;
+  margin: 2px 1px !important;
+  border-radius: 3px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease !important;
+}
+
+.flexlayout__tab_button:hover {
+  background-color: var(--tf-bg-hover, #1a1a1a) !important;
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+.flexlayout__tab_button--selected {
+  background-color: var(--tf-bg-tertiary, #111111) !important;
+  color: var(--tf-accent-primary, #00FF00) !important;
+  border-color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+.flexlayout__tab_button_trailing {
+  margin-left: 6px;
+}
+
+/* Tab close button */
+.flexlayout__tab_button_trailing svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0.4;
+}
+
+.flexlayout__tab_button:hover .flexlayout__tab_button_trailing svg {
+  opacity: 0.8;
+}
+
+/* Tab content area */
+.flexlayout__tab {
+  background-color: var(--tf-bg-primary, #000000) !important;
+  border: none !important;
+}
+
+/* Floating (popout) tabs */
+.flexlayout__floating_window {
+  background-color: var(--tf-bg-primary, #000000) !important;
+  border: 1px solid var(--tf-accent-primary, #00FF00) !important;
+  box-shadow: var(--tf-glow-accent, 0 4px 20px rgba(0, 255, 0, 0.15)) !important;
+}
+
+.flexlayout__floating_window_tab {
+  background-color: var(--tf-bg-tertiary, #0d0d0d) !important;
+  border-bottom: 1px solid var(--tf-border-primary, #1f1f1f) !important;
+}
+
+/* Drag placeholder */
+.flexlayout__drag_rect {
+  background-color: var(--tf-buy-bg, rgba(0, 255, 0, 0.1)) !important;
+  border: 2px dashed var(--tf-accent-primary, #00FF00) !important;
+  border-radius: 4px;
+}
+
+/* Drop indicators */
+.flexlayout__outline_rect {
+  background-color: var(--tf-buy-bg, rgba(0, 255, 0, 0.15)) !important;
+  border: 2px solid var(--tf-accent-primary, #00FF00) !important;
+}
+
+.flexlayout__outline_rect_edge {
+  background-color: var(--tf-buy-bg-intense, rgba(0, 255, 0, 0.2)) !important;
+  border: 2px solid var(--tf-accent-primary, #00FF00) !important;
+}
+
+/* Border panels (docked to edges) */
+.flexlayout__border {
+  background-color: var(--tf-bg-secondary, #0a0a0a) !important;
+  border: 1px solid var(--tf-border-primary, #1f1f1f) !important;
+}
+
+.flexlayout__border_inner {
+  background-color: var(--tf-bg-primary, #000000) !important;
+}
+
+.flexlayout__border_tab {
+  background-color: transparent !important;
+  color: var(--tf-text-muted, #666666) !important;
+  font-size: 10px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.flexlayout__border_tab:hover {
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+.flexlayout__border_tab--selected {
+  background-color: var(--tf-bg-tertiary, #111111) !important;
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+/* Tabset toolbar (buttons on right of tab bar) */
+.flexlayout__tabset_header_content {
+  padding: 0 4px;
+}
+
+.flexlayout__tabset_header_inner {
+  display: flex;
+  align-items: center;
+}
+
+/* Overflow menu */
+.flexlayout__tab_toolbar_button {
+  color: var(--tf-text-muted, #666666) !important;
+}
+
+.flexlayout__tab_toolbar_button:hover {
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+.flexlayout__popup_menu {
+  background-color: var(--tf-bg-tertiary, #0d0d0d) !important;
+  border: 1px solid var(--tf-border-primary, #1f1f1f) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.flexlayout__popup_menu_item {
+  color: var(--tf-text-secondary, #cccccc) !important;
+  font-size: 11px !important;
+}
+
+.flexlayout__popup_menu_item:hover {
+  background-color: var(--tf-bg-hover, #1a1a1a) !important;
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+/* Error states */
+.flexlayout__error_boundary_container {
+  background-color: var(--tf-sell-bg, #1a0000) !important;
+  border: 1px solid var(--tf-sell, #FF0000) !important;
+  color: var(--tf-sell, #FF0000) !important;
+}
+
+/* Maximize button */
+.flexlayout__tabset_header_button {
+  opacity: 0.5;
+}
+
+.flexlayout__tabset_header_button:hover {
+  opacity: 1;
+  color: var(--tf-accent-primary, #00FF00) !important;
+}
+
+/* Hide unnecessary elements for cleaner look */
+.flexlayout__tabset_sizer {
+  display: none;
+}
