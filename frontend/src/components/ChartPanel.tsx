@@ -13,9 +13,10 @@ interface ChartPanelProps {
   symbol?: string;
   width?: number;
   className?: string;
+  compact?: boolean;
 }
 
-export function ChartPanel({ trades: externalTrades, symbol, width = 600, className = '' }: ChartPanelProps) {
+export function ChartPanel({ trades: externalTrades, symbol, width = 600, className = '', compact = false }: ChartPanelProps) {
   const visualization = useSettingsStore((state) => state.visualization);
   const [bufferTrades, setBufferTrades] = useState<TradeWithAnalytics[]>([]);
 

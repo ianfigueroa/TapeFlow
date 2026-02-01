@@ -24,6 +24,7 @@ interface AlgoSignalsProps {
   velocitySpike?: number;
   maxSignals?: number;
   className?: string;
+  compact?: boolean;
 }
 
 function formatDollarCompact(value: number): string {
@@ -43,6 +44,7 @@ export const AlgoSignals = memo(function AlgoSignals({
   velocitySpike = 300,
   maxSignals = 50,
   className,
+  compact: _compact = false,
 }: AlgoSignalsProps) {
   const [signals, setSignals] = useState<AlgoSignal[]>([]);
   const [tradesPerSec, setTradesPerSec] = useState(0);
