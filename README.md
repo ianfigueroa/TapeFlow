@@ -13,58 +13,54 @@ Binance WebSocket (500+ msg/sec)
 Node.js Proxy (port 3001)
     |
     v
-Frontend WebSocket Handler
+Web Worker (data.worker.ts)          <-- Offloads main thread
     |
-    +---> Mutable Buffers (non-React)
-    |         |
-    |         +---> Trade Buffer (circular, 1000 max)
-    |         +---> OrderBook Buffer (latest snapshot)
-    |         +---> Rate Tracker (OPS sliding window)
+    +---> JSON Parsing
+    +---> Trade Aggregation (100ms buckets)
+    +---> Candlestick OHLC Calculation
+    +---> Volume Profile Generation
+    +---> CVD Calculation
+    +---> 10Hz Throttled Output
     |
-    +---> Analytics Engine
-              |
-              +---> OPS Calculator (binary search, 1000ms window)
-              +---> CVD Calculator (session, 1m, 5m, 15m)
-              +---> VWAP Calculator (running numerator/denominator)
-              +---> OBI Calculator (top-10 level imbalance)
-              +---> Spread Analyzer (1-min MA + stdev)
-              |
-              v
-         React Components (60fps polling)
-              |
-              +---> TapeTable (16ms interval)
-              +---> Charts (100ms interval)
-              +---> OrderBook (100ms interval)
+    v
+React Components (via useDataWorker hook)
+    |
+    +---> TapeTable (virtualized, @tanstack/react-virtual)
+    +---> FootprintChart (canvas, heatmap coloring)
+    +---> CandlestickChart (canvas, proper OHLC + wicks)
+    +---> OrderBook (100ms interval)
+    +---> OIMonitor (sparkline, 5-min delta)
+    +---> SessionStats (VWAP, session high/low, delta)
 ```
 
-### Why Mutable Refs Over React State
+### Why Web Workers Over Main Thread
 
-React's reconciliation algorithm runs on every state update. At 500+ trades/second, this creates:
-- Render queue saturation
-- GC pressure from object creation
-- Frame drops below 10fps
+At 500+ trades/second, processing on the main thread causes:
+- JSON parsing blocking UI updates
+- GC pressure from rapid object creation
+- Frame drops below 10fps during market volatility
 
-Solution: Store high-frequency data in plain JavaScript structures outside React's control.
+Solution: Move all data processing to a dedicated Web Worker.
 
 ```typescript
-// Bad: triggers re-render on every trade
-const [trades, setTrades] = useState<Trade[]>([]);
-ws.onmessage = (trade) => setTrades(prev => [trade, ...prev]);
+// data.worker.ts handles:
+// - WebSocket connection management
+// - JSON parsing (expensive at high frequency)
+// - Trade aggregation into 100ms buckets
+// - OHLC candlestick calculation
+// - Volume profile generation
+// - CVD (Cumulative Volume Delta) calculation
 
-// Good: buffer accumulates, UI polls at 60fps
-const buffer: Trade[] = [];
-ws.onmessage = (trade) => buffer.push(trade);
-
-useEffect(() => {
-  const id = setInterval(() => {
-    const batch = buffer.splice(0, buffer.length);
-    if (batch.length > 0) setDisplayTrades(batch);
-  }, 16);
-  return () => clearInterval(id);
-}, []);
+// Main thread receives pre-processed data at 10Hz
+worker.postMessage({ type: 'connect', wsUrl });
+worker.onmessage = (e) => {
+  // Already aggregated, ready for rendering
+  const { trades, candles, volumeProfile, cvd } = e.data;
+  updateUI(trades, candles, volumeProfile, cvd);
+};
 ```
 
-Result: 500 messages/sec in, 60 renders/sec out.
+Result: Main thread stays at 60fps even during 1000+ msg/sec spikes.
 
 ### Canvas Rendering Engine
 
@@ -75,12 +71,30 @@ LayerManager (60fps RAF)
     |
     +---> BackgroundLayer (z:0)   - Grid, axis
     +---> HeatmapLayer (z:10)     - Order book depth, log10 scaling
-    +---> FootprintLayer (z:20)   - Cluster charts, POC highlight
+    +---> FootprintLayer (z:20)   - Cluster charts with heatmap coloring
+    |                               (intensity based on volume percentile)
     +---> IndicatorLayer (z:30)   - VWAP, liquidity zones
     +---> OverlayLayer (z:40)     - Crosshair, tooltips
 ```
 
 Layers register with manager, receive data via `update()`, render via `render(ctx, rc)`.
+
+#### Footprint Heatmap Coloring
+
+Volume cells are colored by intensity relative to the maximum volume in the visible range:
+
+```typescript
+// Calculate intensity (0-1) based on global max volume
+const intensity = Math.min(volume / globalMaxVolume, 1);
+
+// Color gradient: dark blue -> cyan -> yellow -> white
+const getHeatmapColor = (intensity: number): string => {
+  if (intensity < 0.25) return `rgba(0, ${Math.floor(intensity * 4 * 200)}, 255, 0.8)`;
+  if (intensity < 0.5) return `rgba(0, 200, ${Math.floor(255 - (intensity - 0.25) * 4 * 200)}, 0.9)`;
+  if (intensity < 0.75) return `rgba(${Math.floor((intensity - 0.5) * 4 * 255)}, 200, 0, 0.95)`;
+  return `rgba(255, ${Math.floor(200 + (intensity - 0.75) * 4 * 55)}, 0, 1.0)`;
+};
+```
 
 ### Analytics Module
 
