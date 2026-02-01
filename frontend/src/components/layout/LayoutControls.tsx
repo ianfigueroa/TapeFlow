@@ -4,6 +4,20 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useLayoutStore } from '../../stores/useLayoutStore';
+import type { PanelId } from '../../types/layout';
+
+// Panel metadata for display
+const PANEL_INFO: { id: PanelId; name: string; description: string }[] = [
+  { id: 'tape-table', name: 'Tape / Time & Sales', description: 'Real-time trade flow' },
+  { id: 'order-book', name: 'Order Book', description: 'L2 depth with heatmap' },
+  { id: 'tabbed-chart', name: 'Charts', description: 'Price, Volume, Footprint' },
+  { id: 'algo-signals', name: 'Algo Signals', description: 'Whale alerts, surges' },
+  { id: 'analysis-dashboard', name: 'Analytics', description: 'Delta, OBI, metrics' },
+  { id: 'sentiment-panel', name: 'Sentiment', description: 'Market sentiment gauge' },
+  { id: 'news-feed', name: 'News Feed', description: 'Real-time crypto news' },
+  { id: 'volume-profile', name: 'Volume Profile', description: 'Price distribution' },
+  { id: 'dom-ladder', name: 'DOM Ladder', description: 'Depth of market ladder' },
+];
 
 // Icons
 const LockIcon = () => (
@@ -54,16 +68,19 @@ export function LayoutControls({ className }: LayoutControlsProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
+  const [isPanelSectionExpanded, setIsPanelSectionExpanded] = useState(true);
 
   // Get store state
   const activePresetId = useLayoutStore((state) => state.activePresetId);
   const presets = useLayoutStore((state) => state.presets);
   const isLocked = useLayoutStore((state) => state.isLocked);
+  const hiddenPanels = useLayoutStore((state) => state.hiddenPanels);
   const loadPreset = useLayoutStore((state) => state.loadPreset);
   const savePreset = useLayoutStore((state) => state.savePreset);
   const deletePreset = useLayoutStore((state) => state.deletePreset);
   const setLocked = useLayoutStore((state) => state.setLocked);
   const resetToDefault = useLayoutStore((state) => state.resetToDefault);
+  const togglePanel = useLayoutStore((state) => state.togglePanel);
 
   // Get current preset
   const currentPreset = presets.find((p) => p.id === activePresetId);
@@ -227,6 +244,86 @@ export function LayoutControls({ className }: LayoutControlsProps) {
           </div>
         </div>
       )}
+
+      {/* Panel Visibility Section */}
+      <div className="border border-gray-800 rounded overflow-hidden">
+        <button
+          onClick={() => setIsPanelSectionExpanded(!isPanelSectionExpanded)}
+          className="w-full flex items-center justify-between px-3 py-2 bg-gray-900/50 text-sm font-mono text-gray-400 hover:text-gray-300 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+            Panel Visibility
+          </span>
+          <svg 
+            className={cn("w-4 h-4 transition-transform", isPanelSectionExpanded && "rotate-180")}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        
+        {isPanelSectionExpanded && (
+          <div className="p-3 space-y-1 bg-black">
+            {PANEL_INFO.map((panel) => {
+              const isVisible = !hiddenPanels.includes(panel.id);
+              return (
+                <button
+                  key={panel.id}
+                  onClick={() => togglePanel(panel.id)}
+                  className={cn(
+                    'w-full flex items-center justify-between px-3 py-2 rounded text-sm font-mono transition-colors',
+                    isVisible 
+                      ? 'bg-gray-900/50 text-gray-300 hover:bg-gray-900' 
+                      : 'bg-transparent text-gray-600 hover:bg-gray-900/30'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className={cn(
+                        'w-4 h-4 rounded border flex items-center justify-center transition-colors',
+                        isVisible 
+                          ? 'bg-[#00FF41] border-[#00FF41]' 
+                          : 'bg-transparent border-gray-700'
+                      )}
+                    >
+                      {isVisible && (
+                        <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <span>{panel.name}</span>
+                  </div>
+                  <span className="text-xs text-gray-600">{panel.description}</span>
+                </button>
+              );
+            })}
+            
+            {/* Quick actions */}
+            <div className="flex gap-2 pt-2 mt-2 border-t border-gray-800">
+              <button
+                onClick={() => PANEL_INFO.forEach(p => {
+                  if (hiddenPanels.includes(p.id)) togglePanel(p.id);
+                })}
+                className="flex-1 px-2 py-1 text-xs font-mono text-gray-500 hover:text-[#00FF41] transition-colors"
+              >
+                Show All
+              </button>
+              <button
+                onClick={() => PANEL_INFO.forEach(p => {
+                  if (!hiddenPanels.includes(p.id)) togglePanel(p.id);
+                })}
+                className="flex-1 px-2 py-1 text-xs font-mono text-gray-500 hover:text-[#FF4545] transition-colors"
+              >
+                Hide All
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Lock State Indicator */}
       {isLocked && (

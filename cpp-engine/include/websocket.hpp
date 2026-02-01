@@ -163,9 +163,16 @@ namespace hyperion
     class WebSocketServer
     {
     public:
+        using MessageHandler = std::function<void(const std::string &)>;
+
         WebSocketServer(uint16_t port = 9001) : port_(port), running_(false) {}
 
         ~WebSocketServer() { stop(); }
+
+        void setMessageHandler(MessageHandler handler)
+        {
+            messageHandler_ = std::move(handler);
+        }
 
         bool start()
         {
@@ -215,12 +222,23 @@ namespace hyperion
             if (acceptThread_.joinable())
                 acceptThread_.join();
 
-            std::lock_guard<std::mutex> lock(clientsMutex_);
-            for (auto &client : clients_)
+            // Stop all receiver threads
             {
-                CLOSE_SOCKET(client);
+                std::lock_guard<std::mutex> lock(clientsMutex_);
+                for (auto &client : clients_)
+                {
+                    CLOSE_SOCKET(client);
+                }
+                clients_.clear();
             }
-            clients_.clear();
+
+            // Wait for receiver threads
+            for (auto &t : receiverThreads_)
+            {
+                if (t.joinable())
+                    t.join();
+            }
+            receiverThreads_.clear();
 
 #ifdef _WIN32
             WSACleanup();
@@ -264,7 +282,9 @@ namespace hyperion
         std::atomic<bool> running_;
         std::thread acceptThread_;
         std::vector<socket_t> clients_;
+        std::vector<std::thread> receiverThreads_;
         mutable std::mutex clientsMutex_;
+        MessageHandler messageHandler_;
 
         void acceptLoop()
         {
@@ -297,14 +317,128 @@ namespace hyperion
                 // Perform handshake synchronously to avoid detached thread issues
                 if (performHandshake(clientSocket))
                 {
-                    std::lock_guard<std::mutex> lock(clientsMutex_);
-                    clients_.push_back(clientSocket);
+                    {
+                        std::lock_guard<std::mutex> lock(clientsMutex_);
+                        clients_.push_back(clientSocket);
+                    }
+
+                    // Start receiver thread for this client
+                    receiverThreads_.emplace_back(&WebSocketServer::clientReceiveLoop, this, clientSocket);
                 }
                 else
                 {
                     CLOSE_SOCKET(clientSocket);
                 }
             }
+        }
+
+        void clientReceiveLoop(socket_t client)
+        {
+            // Set receive timeout
+#ifdef _WIN32
+            DWORD timeout = 100; // 100ms
+            setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<char *>(&timeout), sizeof(timeout));
+#else
+            struct timeval tv;
+            tv.tv_sec = 0;
+            tv.tv_usec = 100000;
+            setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+
+            char buffer[4096];
+            while (running_)
+            {
+                int received = recv(client, buffer, sizeof(buffer), 0);
+                if (received <= 0)
+                {
+                    if (received == 0)
+                        break; // Connection closed
+#ifdef _WIN32
+                    if (WSAGetLastError() == WSAETIMEDOUT)
+                        continue;
+#else
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                        continue;
+#endif
+                    break; // Error
+                }
+
+                // Parse WebSocket frame
+                std::string message = parseFrame(buffer, received);
+                if (!message.empty() && messageHandler_)
+                {
+                    messageHandler_(message);
+                }
+            }
+
+            // Remove client from list
+            {
+                std::lock_guard<std::mutex> lock(clientsMutex_);
+                auto it = std::find(clients_.begin(), clients_.end(), client);
+                if (it != clients_.end())
+                {
+                    clients_.erase(it);
+                }
+            }
+            CLOSE_SOCKET(client);
+        }
+
+        std::string parseFrame(const char *data, int len)
+        {
+            if (len < 2)
+                return "";
+
+            uint8_t opcode = data[0] & 0x0F;
+            if (opcode == 0x08)
+                return ""; // Close frame
+            if (opcode != 0x01)
+                return ""; // Only handle text frames
+
+            bool masked = (data[1] & 0x80) != 0;
+            uint64_t payloadLen = data[1] & 0x7F;
+            int headerLen = 2;
+
+            if (payloadLen == 126)
+            {
+                if (len < 4)
+                    return "";
+                payloadLen = (static_cast<uint8_t>(data[2]) << 8) | static_cast<uint8_t>(data[3]);
+                headerLen = 4;
+            }
+            else if (payloadLen == 127)
+            {
+                if (len < 10)
+                    return "";
+                payloadLen = 0;
+                for (int i = 0; i < 8; i++)
+                {
+                    payloadLen = (payloadLen << 8) | static_cast<uint8_t>(data[2 + i]);
+                }
+                headerLen = 10;
+            }
+
+            int maskOffset = headerLen;
+            if (masked)
+                headerLen += 4;
+
+            if (static_cast<uint64_t>(len) < headerLen + payloadLen)
+                return "";
+
+            std::string result(payloadLen, '\0');
+            if (masked)
+            {
+                const char *mask = data + maskOffset;
+                for (uint64_t i = 0; i < payloadLen; i++)
+                {
+                    result[i] = data[headerLen + i] ^ mask[i % 4];
+                }
+            }
+            else
+            {
+                std::memcpy(&result[0], data + headerLen, payloadLen);
+            }
+
+            return result;
         }
 
         bool performHandshake(socket_t client)

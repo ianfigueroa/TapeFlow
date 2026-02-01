@@ -32,6 +32,23 @@ namespace hyperion
         std::atomic<bool> running{false};
     };
 
+    // Runtime-configurable simulation parameters
+    struct SimulationConfig
+    {
+        uint64_t targetOPS = 1000000;           // Target orders per second
+        double basePrice = 92000.0;             // Base price for mean reversion
+        double volatilityMultiplier = 1.0;      // Volatility scaling factor
+        double momentumStrength = 1.0;          // How strongly momentum affects price
+        double meanReversionStrength = 0.00005; // Strength of mean reversion
+
+        // Trader type distribution (must sum to 1.0)
+        double marketMakerPct = 0.40;
+        double retailPct = 0.20;
+        double institutionalPct = 0.15;
+        double algoMomentumPct = 0.15;
+        double algoMeanRevertPct = 0.10;
+    };
+
     // Trader persona types for realistic behavior
     enum class TraderType
     {
@@ -46,8 +63,9 @@ namespace hyperion
     {
     public:
         MarketSimulator(OrderBook &book, double startPrice = 92000.0)
-            : book_(book), basePrice_(startPrice), currentPrice_(startPrice), vwap_(startPrice), rng_(std::random_device{}()), normalDist_(0.0, 1.0), uniformDist_(0.0, 1.0)
+            : book_(book), currentPrice_(startPrice), vwap_(startPrice), rng_(std::random_device{}()), normalDist_(0.0, 1.0), uniformDist_(0.0, 1.0)
         {
+            config_.basePrice = startPrice;
             stats_.currentPrice = startPrice;
             stats_.highPrice = startPrice;
             stats_.lowPrice = startPrice;
@@ -65,7 +83,7 @@ namespace hyperion
             if (stats_.running.exchange(true))
                 return;
 
-            targetOPS_ = targetOPS;
+            config_.targetOPS = targetOPS;
             simulationThread_ = std::thread(&MarketSimulator::runSimulation, this);
         }
 
@@ -79,6 +97,59 @@ namespace hyperion
         }
 
         const SimulationStats &getStats() const { return stats_; }
+
+        // Runtime configuration
+        SimulationConfig getConfig() const
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            return config_;
+        }
+
+        void setConfig(const SimulationConfig &newConfig)
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_ = newConfig;
+        }
+
+        // Individual setters for common adjustments
+        void setTargetOPS(uint64_t ops)
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_.targetOPS = ops;
+        }
+
+        void setBasePrice(double price)
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_.basePrice = price;
+        }
+
+        void setVolatilityMultiplier(double mult)
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_.volatilityMultiplier = std::max(0.1, std::min(10.0, mult));
+        }
+
+        void setMomentumStrength(double strength)
+        {
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_.momentumStrength = std::max(0.0, std::min(5.0, strength));
+        }
+
+        void setTraderDistribution(double mm, double retail, double inst, double algoMom, double algoMR)
+        {
+            // Normalize to sum to 1.0
+            double total = mm + retail + inst + algoMom + algoMR;
+            if (total <= 0)
+                return;
+
+            std::lock_guard<std::mutex> lock(configMutex_);
+            config_.marketMakerPct = mm / total;
+            config_.retailPct = retail / total;
+            config_.institutionalPct = inst / total;
+            config_.algoMomentumPct = algoMom / total;
+            config_.algoMeanRevertPct = algoMR / total;
+        }
 
         using PriceCallback = std::function<void(double price, uint64_t volume)>;
         void setPriceCallback(PriceCallback cb, uint64_t interval = 1000)
@@ -94,14 +165,16 @@ namespace hyperion
 
     private:
         OrderBook &book_;
-        double basePrice_;
         double currentPrice_;
         double vwap_;
-        uint64_t targetOPS_;
 
         std::mt19937_64 rng_;
         std::normal_distribution<double> normalDist_;
         std::uniform_real_distribution<double> uniformDist_;
+
+        // Configuration (thread-safe)
+        SimulationConfig config_;
+        mutable std::mutex configMutex_;
 
         // Market state
         double momentum_ = 0.0;
@@ -201,7 +274,15 @@ namespace hyperion
                 }
 
                 auto elapsed = std::chrono::duration<double>(batchEnd - startTime).count();
-                double expectedTime = static_cast<double>(orderCount) / targetOPS_;
+
+                // Get target OPS from config (thread-safe)
+                uint64_t targetOPS;
+                {
+                    std::lock_guard<std::mutex> lock(configMutex_);
+                    targetOPS = config_.targetOPS;
+                }
+
+                double expectedTime = static_cast<double>(orderCount) / targetOPS;
                 if (elapsed < expectedTime)
                 {
                     auto sleepTime = std::chrono::duration<double>(expectedTime - elapsed);
@@ -214,30 +295,55 @@ namespace hyperion
 
         TraderType selectTraderType()
         {
+            // Get distribution from config
+            double mmPct, retailPct, instPct, algoMomPct;
+            {
+                std::lock_guard<std::mutex> lock(configMutex_);
+                mmPct = config_.marketMakerPct;
+                retailPct = config_.retailPct;
+                instPct = config_.institutionalPct;
+                algoMomPct = config_.algoMomentumPct;
+            }
+
             double r = uniformDist_(rng_);
-            if (r < 0.40)
-                return TraderType::MARKET_MAKER; // 40% - provides liquidity
-            if (r < 0.60)
-                return TraderType::RETAIL; // 20% - retail traders
-            if (r < 0.75)
-                return TraderType::INSTITUTIONAL; // 15% - big players
-            if (r < 0.90)
-                return TraderType::ALGO_MOMENTUM; // 15% - trend followers
-            return TraderType::ALGO_MEAN_REVERT;  // 10% - contrarians
+            double cumulative = 0.0;
+            cumulative += mmPct;
+            if (r < cumulative)
+                return TraderType::MARKET_MAKER;
+            cumulative += retailPct;
+            if (r < cumulative)
+                return TraderType::RETAIL;
+            cumulative += instPct;
+            if (r < cumulative)
+                return TraderType::INSTITUTIONAL;
+            cumulative += algoMomPct;
+            if (r < cumulative)
+                return TraderType::ALGO_MOMENTUM;
+            return TraderType::ALGO_MEAN_REVERT;
         }
 
         void generateHumanLikeOrder(TraderType trader)
         {
+            // Get config values (thread-safe)
+            double basePrice, volatilityMult, momentumStrength, meanRevStrength;
+            {
+                std::lock_guard<std::mutex> lock(configMutex_);
+                basePrice = config_.basePrice;
+                volatilityMult = config_.volatilityMultiplier;
+                momentumStrength = config_.momentumStrength;
+                meanRevStrength = config_.meanReversionStrength;
+            }
+
             // Realistic price evolution with Ornstein-Uhlenbeck process
-            double noise = normalDist_(rng_) * realizedVolatility_ * currentPrice_;
-            double drift = momentum_ * currentPrice_ * 0.0001;
-            double meanReversion = (basePrice_ - currentPrice_) * 0.00005;
+            double noise = normalDist_(rng_) * realizedVolatility_ * volatilityMult * currentPrice_;
+            double drift = momentum_ * momentumStrength * currentPrice_ * 0.0001;
+            double meanReversion = (basePrice - currentPrice_) * meanRevStrength;
 
             currentPrice_ += noise + drift + meanReversion;
 
             // Clamp price to realistic range (±10% from base)
-            double minPrice = basePrice_ * 0.90;
-            double maxPrice = basePrice_ * 1.10;
+            double minPrice = basePrice * 0.90;
+            double maxPrice = basePrice * 1.10;
             currentPrice_ = std::max(minPrice, std::min(maxPrice, currentPrice_));
 
             // Update VWAP

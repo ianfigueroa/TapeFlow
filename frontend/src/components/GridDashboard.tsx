@@ -5,7 +5,7 @@
  * Integrates all panels: tape, order book, charts, sentiment, news, volume profile, DOM.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, memo } from 'react';
 import { DashboardGrid } from './layout/DashboardGrid';
 import { GridPanel } from './layout/GridPanel';
 import { useLayoutStore } from '../stores/useLayoutStore';
@@ -23,10 +23,48 @@ import { DOMLadder } from './DOMLadder';
 import { cn } from '../lib/utils';
 import type { PanelId } from '../types/layout';
 
-interface GridDashboardProps {
-  symbol: string;
-  className?: string;
-}
+// Skeleton loader component for empty states
+const SkeletonLoader = memo(function SkeletonLoader({ 
+  title, 
+  lines = 5,
+  showHeader = true 
+}: { 
+  title: string; 
+  lines?: number;
+  showHeader?: boolean;
+}) {
+  return (
+    <div className="h-full w-full bg-black p-3 font-mono animate-pulse">
+      {showHeader && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-2 h-2 rounded-full bg-gray-800" />
+          <span className="text-gray-700 text-xs uppercase tracking-wider">{title}</span>
+        </div>
+      )}
+      <div className="space-y-2">
+        {Array.from({ length: lines }).map((_, i) => (
+          <div 
+            key={i} 
+            className="h-3 bg-gray-900 rounded"
+            style={{ width: `${60 + Math.random() * 35}%`, opacity: 1 - (i * 0.1) }}
+          />
+        ))}
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-gray-700 text-xs">&gt; Awaiting data...</span>
+      </div>
+    </div>
+  );
+});
+
+// Empty state wrapper for consistent styling
+const EmptyPanel = memo(function EmptyPanel({ title }: { title: string }) {
+  return (
+    <div className="h-full w-full bg-black flex items-center justify-center relative overflow-hidden">
+      <SkeletonLoader title={title} />
+    </div>
+  );
+});
 
 interface GridDashboardProps {
   symbol: string;
@@ -86,12 +124,14 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="algo-signals">
           <GridPanel panelId="algo-signals">
-            {symbolData && (
+            {symbolData ? (
               <AlgoSignals
                 symbol={symbolData.symbol}
                 velocitySpike={300}
                 className="h-full"
               />
+            ) : (
+              <EmptyPanel title="Algo Signals" />
             )}
           </GridPanel>
         </div>
@@ -124,13 +164,15 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="order-book">
           <GridPanel panelId="order-book">
-            {symbolData && (
+            {symbolData ? (
               <OrderBook
                 orderBook={symbolData.orderBook}
                 assetType={symbolData.assetType}
                 symbol={symbolData.symbol}
                 showHeatmap={visualization.showHeatmap}
               />
+            ) : (
+              <EmptyPanel title="Order Book" />
             )}
           </GridPanel>
         </div>
@@ -141,8 +183,10 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="analysis-dashboard">
           <GridPanel panelId="analysis-dashboard">
-            {symbolData && (
+            {symbolData ? (
               <AnalysisDashboard symbol={symbolData.symbol} />
+            ) : (
+              <EmptyPanel title="Analytics" />
             )}
           </GridPanel>
         </div>
@@ -153,11 +197,13 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="sentiment-panel">
           <GridPanel panelId="sentiment-panel">
-            {symbolData && (
+            {symbolData ? (
               <SentimentPanel
                 symbol={symbolData.symbol}
                 className="h-full"
               />
+            ) : (
+              <EmptyPanel title="Sentiment" />
             )}
           </GridPanel>
         </div>
@@ -168,11 +214,13 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="news-feed">
           <GridPanel panelId="news-feed">
-            {symbolData && (
+            {symbolData ? (
               <NewsFeed
                 symbol={symbolData.symbol}
                 className="h-full"
               />
+            ) : (
+              <EmptyPanel title="News Feed" />
             )}
           </GridPanel>
         </div>
@@ -183,11 +231,13 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="volume-profile">
           <GridPanel panelId="volume-profile">
-            {symbolData && (
+            {symbolData ? (
               <VolumeProfile
                 symbol={symbolData.symbol}
                 className="h-full"
               />
+            ) : (
+              <EmptyPanel title="Volume Profile" />
             )}
           </GridPanel>
         </div>
@@ -198,11 +248,13 @@ export function GridDashboard({ symbol, className }: GridDashboardProps) {
       result.push(
         <div key="dom-ladder">
           <GridPanel panelId="dom-ladder">
-            {symbolData && (
+            {symbolData ? (
               <DOMLadder
                 symbol={symbolData.symbol}
                 className="h-full"
               />
+            ) : (
+              <EmptyPanel title="DOM Ladder" />
             )}
           </GridPanel>
         </div>

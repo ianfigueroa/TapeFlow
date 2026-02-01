@@ -43,3 +43,6 @@ coverage/
 
 # Architecture documentation
 docs/ARCHITECTURE.md
+
+.claude
+CLAUDE.md
