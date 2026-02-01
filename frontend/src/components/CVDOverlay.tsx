@@ -147,24 +147,32 @@ export const CVDOverlay = memo(function CVDOverlay({
 
     const cvdValues = dataPoints.map(d => d.cvd);
     // Safe min/max calculation - guard against empty arrays
-    const minCVD = cvdValues.length > 0 ? Math.min(...cvdValues, 0) : 0;
-    const maxCVD = cvdValues.length > 0 ? Math.max(...cvdValues, 0) : 0;
-    // Ensure range is never zero to prevent division by zero
-    const range = Math.max(Math.abs(maxCVD), Math.abs(minCVD), 1) * 1.1;
+    const minCVD = cvdValues.length > 0 ? Math.min(...cvdValues) : 0;
+    const maxCVD = cvdValues.length > 0 ? Math.max(...cvdValues) : 0;
+    
+    // Use independent min/max with 10% padding for better scale utilization
+    const absMax = Math.max(Math.abs(maxCVD), Math.abs(minCVD), 1);
+    const padding10 = absMax * 0.1;
+    const yMin = Math.min(minCVD, 0) - padding10;
+    const yMax = Math.max(maxCVD, 0) + padding10;
+    const range = yMax - yMin;
     
     const padding = 4;
     const yAxisWidth = 45; // Space for Y-axis labels
     const chartHeight = height - padding * 2;
     const chartWidth = 300 - yAxisWidth; // Will be scaled by viewBox
     
-    // Zero line position
-    const zero = chartHeight / 2 + padding;
+    // Zero line position - calculated based on where 0 falls in the yMin..yMax range
+    const zeroRatio = (yMax - 0) / range;
+    const zero = padding + zeroRatio * chartHeight;
     
     const points = dataPoints.map((d, i) => {
       // Safe division - dataPoints.length is at least 2 here, but guard anyway
       const xRatio = dataPoints.length > 1 ? i / (dataPoints.length - 1) : 0;
       const x = yAxisWidth + xRatio * chartWidth;
-      const y = zero - (d.cvd / range) * (chartHeight / 2);
+      // Y is mapped from yMax (top) to yMin (bottom)
+      const yRatio = (yMax - d.cvd) / range;
+      const y = padding + yRatio * chartHeight;
       return { x, y: isFinite(y) ? y : zero, cvd: d.cvd };
     });
 
@@ -195,12 +203,13 @@ export const CVDOverlay = memo(function CVDOverlay({
     positiveArea += ` L ${yAxisWidth + chartWidth} ${zero} Z`;
     negativeArea += ` L ${yAxisWidth + chartWidth} ${zero} Z`;
     
-    // Generate Y-axis labels
+    // Generate Y-axis labels using the independent min/max range
     const numLabels = 5;
     const labels: { y: number; value: string }[] = [];
     for (let i = 0; i <= numLabels; i++) {
       const ratio = i / numLabels;
-      const cvdValue = range - (ratio * range * 2);
+      // Map from yMax (top, i=0) to yMin (bottom, i=numLabels)
+      const cvdValue = yMax - (ratio * range);
       const y = padding + (ratio * chartHeight);
       labels.push({
         y,
