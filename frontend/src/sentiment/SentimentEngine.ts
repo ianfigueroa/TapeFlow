@@ -19,7 +19,6 @@ import type {
   SentimentBias,
   SentimentHistory,
   SentimentConfig,
-  SentimentSource,
 } from './types';
 import { DEFAULT_SENTIMENT_CONFIG } from './types';
 
@@ -45,9 +44,6 @@ export class SentimentEngine {
   // Previous state for trend detection
   private previousScore: number = 0;
   private lastUpdate: number = 0;
-  
-  // Volume tracking for confidence
-  private totalVolume: number = 0;
 
   constructor(symbol: string, config: Partial<SentimentConfig> = {}) {
     this.symbol = symbol.toUpperCase();
@@ -137,7 +133,7 @@ export class SentimentEngine {
   /**
    * Calculate individual indicator scores
    */
-  private calculateIndicators(analytics: AnalyticsSnapshot): SentimentIndicator[] {
+  private calculateIndicators(_analytics: AnalyticsSnapshot): SentimentIndicator[] {
     const indicators: SentimentIndicator[] = [];
     const weights = this.config.weights;
     
@@ -231,7 +227,7 @@ export class SentimentEngine {
     if (positiveCount >= 2 && negativeCount >= 2) confidence -= 15;
     
     // Enough history for trend analysis
-    if (this.history.getLength() > 10) confidence += 5;
+    if (this.history.length > 10) confidence += 5;
     
     return Math.max(10, Math.min(95, confidence));
   }
@@ -360,7 +356,6 @@ export class SentimentEngine {
     this.priceHistory = [];
     this.previousScore = 0;
     this.lastUpdate = 0;
-    this.totalVolume = 0;
     this.history.clear();
   }
 
@@ -371,7 +366,7 @@ export class SentimentEngine {
     this.config = { ...this.config, ...config };
     
     // Resize history buffer if needed
-    if (config.historySize && config.historySize !== this.history.getCapacity()) {
+    if (config.historySize && config.historySize !== this.history.capacity) {
       const oldHistory = this.history.toArray();
       this.history = new CircularBuffer<SentimentHistory>(config.historySize);
       for (const item of oldHistory.slice(-config.historySize)) {
