@@ -1,12 +1,17 @@
 // DashboardGrid - ResponsiveGridLayout wrapper for panel arrangement
-// Connects to useLayoutStore for persistence and preset management
+// Note: This component is deprecated in favor of the CSS Grid Bento-box layout in TradingDashboard.tsx
+// Keeping for backwards compatibility but stubbing out react-grid-layout dependency
 
 import { type ReactElement, Children, cloneElement, useCallback, useMemo, useState, useEffect, useRef } from 'react';
-import { ResponsiveGridLayout, verticalCompactor } from 'react-grid-layout';
-import type { LayoutItem, Layout, ResponsiveLayouts } from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
+import type { LayoutItem, Layout, ResponsiveLayouts } from '../../types/layout';
 import { useLayoutStore } from '../../stores/useLayoutStore';
 import type { GridConfig, PanelId, Layouts } from '../../types/layout';
+
+// Stub for react-grid-layout (not installed)
+const ResponsiveGridLayout = ({ children, ...props }: { children: React.ReactNode; [key: string]: unknown }) => (
+  <div className="react-grid-layout-stub" data-props={JSON.stringify(Object.keys(props))}>{children}</div>
+);
+const verticalCompactor = () => {};
 
 // Grid configuration
 export const GRID_CONFIG: GridConfig = {

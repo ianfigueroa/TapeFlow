@@ -1,9 +1,31 @@
-// Layout types for react-grid-layout integration
-import type { Layout, LayoutItem, ResponsiveLayouts } from 'react-grid-layout';
+// Layout types (local definitions to avoid external dependency)
 
-// Re-export for convenience
-// Note: v2 uses ResponsiveLayouts instead of Layouts
-export type { Layout, LayoutItem };
+// Local LayoutItem type definition
+export interface LayoutItem {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+  static?: boolean;
+  isDraggable?: boolean;
+  isResizable?: boolean;
+  isBounded?: boolean;
+}
+
+// Layout is an array of LayoutItems
+export type Layout = LayoutItem[];
+
+// ResponsiveLayouts maps breakpoint names to layouts
+export type ResponsiveLayouts = {
+  [breakpoint: string]: Layout;
+};
+
+// Alias for backwards compatibility
 export type Layouts = ResponsiveLayouts;
 
 /**

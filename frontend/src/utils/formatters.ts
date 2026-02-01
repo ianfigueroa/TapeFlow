@@ -240,9 +240,6 @@ export function getIntensityColor(side: string, amount: number): { color: string
     };
   }
   
-  // Calculate intensity (0.3 to 1.0) based on trade size
-  const intensity = Math.min(1.0, 0.3 + (amount / colors.whaleThreshold) * 0.7);
-  
   if (isWhale) {
     // Whale trades get maximum intensity with glow effect
     return {

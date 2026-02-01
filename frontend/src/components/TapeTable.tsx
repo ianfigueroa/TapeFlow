@@ -1,6 +1,8 @@
 // Real-time trade stream (tape) - renders at 60fps using buffered data
+// Now with virtualization for high-throughput performance
 
-import { useRef, useEffect, useState, memo, useMemo } from 'react';
+import { useRef, useEffect, useState, memo, useMemo, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '../lib/utils';
 import { formatPrice, formatTime, getSideBackground } from '../utils/formatters';
 import type { TradeWithAnalytics, AssetType } from '../types';
@@ -8,9 +10,60 @@ import { flushTradeBuffer, setProcessedTrades, updateVwap, clearSymbolBuffer, ge
 import { enrichTradeWithAnalytics } from '../utils/calculations';
 
 const RENDER_INTERVAL_MS = 16;  // 60fps
-const MAX_VISIBLE_ROWS = 50;
+const MAX_VISIBLE_ROWS = 200;   // Increased - virtualization handles it
 const WHALE_THRESHOLD_USD = 50000;
 const AGGREGATION_WINDOW_MS = 50;
+
+// Deduplication tracking
+const seenTradeKeys = new Map<string, Set<string>>(); // symbol -> Set of composite keys
+
+/**
+ * Generate a composite key for trade deduplication
+ * Uses timestamp + price + amount + side as a unique identifier
+ */
+function getTradeCompositeKey(trade: { timestamp: number; price: number; volume: number; side: string; id?: string }): string {
+  // If we have a trade ID from the exchange, use it
+  if (trade.id && !trade.id.startsWith('trade-')) {
+    return trade.id;
+  }
+  // Otherwise, create composite key: timestamp_price_volume_side
+  return `${trade.timestamp}_${trade.price.toFixed(8)}_${trade.volume.toFixed(8)}_${trade.side}`;
+}
+
+/**
+ * Check if trade is a duplicate based on composite key
+ */
+function isTradeNew(symbol: string, trade: { timestamp: number; price: number; volume: number; side: string; id?: string }): boolean {
+  const key = symbol.toUpperCase();
+  if (!seenTradeKeys.has(key)) {
+    seenTradeKeys.set(key, new Set());
+  }
+  
+  const compositeKey = getTradeCompositeKey(trade);
+  const seen = seenTradeKeys.get(key)!;
+  
+  if (seen.has(compositeKey)) {
+    return false; // Duplicate
+  }
+  
+  // Add to seen set
+  seen.add(compositeKey);
+  
+  // Prune old keys to prevent memory leak (keep last 5000)
+  if (seen.size > 5000) {
+    const arr = Array.from(seen);
+    arr.slice(0, 2000).forEach(k => seen.delete(k));
+  }
+  
+  return true;
+}
+
+/**
+ * Clear deduplication cache for symbol
+ */
+function clearDeduplicationCache(symbol: string): void {
+  seenTradeKeys.delete(symbol.toUpperCase());
+}
 
 // Liquidation colors
 const LIQUIDATION_LONG_COLOR = '#A855F7';   // Purple for long liquidations (rekt longs)
@@ -238,39 +291,63 @@ const TradeRow = memo(function TradeRow({ trade, assetType, onClick, showAnalyti
   );
 }, (prev, next) => prev.trade.id === next.trade.id && prev.showAnalytics === next.showAnalytics);
 
+// Virtualized row component for react-virtual
+const VirtualTradeRow = memo(function VirtualTradeRow({
+  trade,
+  assetType,
+  showAnalytics,
+  style,
+}: {
+  trade: TradeWithAnalytics;
+  assetType: AssetType;
+  showAnalytics: boolean;
+  style: React.CSSProperties;
+}) {
+  return (
+    <div style={style}>
+      <TradeRow
+        trade={trade}
+        assetType={assetType}
+        isNew={false}
+        isAggregated={false}
+        showAnalytics={showAnalytics}
+      />
+    </div>
+  );
+});
+
 export function TapeTable({
   trades: externalTrades,
   assetType,
   symbol,
   pauseScroll = false,
   showAnalytics = true,
-  maxHeight = 'calc(100vh - 200px)',
-  onTradeClick,
-  compact = false,
+  maxHeight: _maxHeight = 'calc(100vh - 200px)',
+  onTradeClick: _onTradeClick,
+  compact: _compact = false,
 }: TapeTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayTrades, setDisplayTrades] = useState<TradeWithAnalytics[]>([]);
-  const [newTradeIds, setNewTradeIds] = useState<Set<string>>(new Set());
-  const [aggregatedIds, setAggregatedIds] = useState<Set<string>>(new Set());
-  const [stats, setStats] = useState({ tradesPerSecond: 0, avgTradesPerSecond: 0, totalTrades: 0 });
+  const [stats, setStats] = useState({ tradesPerSecond: 0, avgTradesPerSecond: 0, totalTrades: 0, duplicatesFiltered: 0 });
   const [minTradeSize, setMinTradeSize] = useState(100);
   const totalTradesRef = useRef(0);
+  const duplicatesRef = useRef(0);
   
   // Reset on symbol change
   useEffect(() => {
     if (!symbol) return;
     setDisplayTrades([]);
-    setNewTradeIds(new Set());
-    setAggregatedIds(new Set());
-    setStats({ tradesPerSecond: 0, avgTradesPerSecond: 0, totalTrades: 0 });
+    setStats({ tradesPerSecond: 0, avgTradesPerSecond: 0, totalTrades: 0, duplicatesFiltered: 0 });
     totalTradesRef.current = 0;
+    duplicatesRef.current = 0;
     resetTradeRateTracker(symbol);
     clearSymbolBuffer(symbol);
+    clearDeduplicationCache(symbol);
     updateVwap(symbol, 0);
     setProcessedTrades(symbol, []);
   }, [symbol]);
 
-  // Main render loop at 60fps
+  // Main render loop at 60fps with deduplication
   useEffect(() => {
     if (!symbol) return;
     
@@ -278,18 +355,23 @@ export function TapeTable({
       const { trades: newTrades, hasNewData } = flushTradeBuffer(symbol);
       if (!hasNewData || newTrades.length === 0) return;
       
-      const enrichedTrades = newTrades.map(t => enrichTradeWithAnalytics(t, null));
+      // Filter duplicates using composite key
+      const uniqueTrades = newTrades.filter(t => isTradeNew(symbol, t));
+      duplicatesRef.current += (newTrades.length - uniqueTrades.length);
+      
+      if (uniqueTrades.length === 0) return;
+      
+      const enrichedTrades = uniqueTrades.map(t => enrichTradeWithAnalytics(t, null));
       
       setDisplayTrades(prev => {
         const result = [...prev];
-        const aggregatedTradeIds: string[] = [];
         
         for (const newTrade of enrichedTrades) {
+          // Optional: Aggregate same price/side within window
           if (result.length > 0) {
             const top = result[0];
             const timeDiff = Math.abs(newTrade.timestamp - top.timestamp);
             
-            // Aggregate same price/side within 50ms
             if (top.side === newTrade.side && top.price === newTrade.price && timeDiff <= AGGREGATION_WINDOW_MS) {
               result[0] = {
                 ...top,
@@ -297,7 +379,6 @@ export function TapeTable({
                 timestamp: Math.max(top.timestamp, newTrade.timestamp),
                 delta: newTrade.delta,
               };
-              aggregatedTradeIds.push(top.id);
               continue;
             }
           }
@@ -311,24 +392,16 @@ export function TapeTable({
           updateVwap(symbol, sorted[0].vwap);
         }
         
-        if (aggregatedTradeIds.length > 0) {
-          setAggregatedIds(new Set(aggregatedTradeIds));
-          setTimeout(() => setAggregatedIds(new Set()), 300);
-        }
-        
         return sorted;
       });
       
-      const newIds = new Set(enrichedTrades.map(t => t.id));
-      setNewTradeIds(newIds);
-      setTimeout(() => setNewTradeIds(new Set()), 500);
-      
-      totalTradesRef.current += newTrades.length;
+      totalTradesRef.current += uniqueTrades.length;
       const rateStats = getTradeRate(symbol);
       setStats({
         tradesPerSecond: rateStats.current,
         avgTradesPerSecond: rateStats.avg,
         totalTrades: totalTradesRef.current,
+        duplicatesFiltered: duplicatesRef.current,
       });
     }, RENDER_INTERVAL_MS);
     
@@ -340,12 +413,21 @@ export function TapeTable({
     if (minTradeSize <= 0) return source;
     return source.filter(t => (t.price * t.volume) >= minTradeSize);
   }, [symbol, displayTrades, externalTrades, minTradeSize]);
-  
+
+  // Virtualization setup
+  const rowVirtualizer = useVirtualizer({
+    count: tradesToDisplay.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: useCallback(() => 32, []), // Estimated row height
+    overscan: 10,
+  });
+
+  // Auto-scroll to top for new trades (when not paused)
   useEffect(() => {
     if (!pauseScroll && containerRef.current && tradesToDisplay.length > 0) {
-      containerRef.current.scrollTop = 0;
+      rowVirtualizer.scrollToIndex(0);
     }
-  }, [tradesToDisplay.length, pauseScroll]);
+  }, [tradesToDisplay.length, pauseScroll, rowVirtualizer]);
   
   if (tradesToDisplay.length === 0) {
     return (
@@ -362,61 +444,81 @@ export function TapeTable({
   return (
     <div className="flex flex-col h-full">
       {symbol && (
-        <div className="flex items-center justify-between bg-gray-800/30 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-800">
-          <div className="flex items-center gap-4">
-            <span>{tradesToDisplay.length} trades displayed</span>
-            <div className="flex items-center gap-1.5">
-              <label className="text-gray-500">Min $</label>
+        <div className="flex items-center justify-between bg-gray-800/30 px-3 py-1.5 text-xs text-gray-400 border-b border-gray-800 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="tabular-nums">{tradesToDisplay.length} trades</span>
+            <div className="flex items-center gap-1">
+              <label className="text-gray-500 text-[10px]">Min $</label>
               <input
                 type="number"
                 value={minTradeSize}
                 onChange={(e) => setMinTradeSize(Math.max(0, Number(e.target.value)))}
-                className="w-16 px-1.5 py-0.5 bg-gray-700 border border-gray-600 rounded text-gray-200 text-xs font-mono focus:outline-none focus:border-blue-500"
+                className="w-14 px-1 py-0.5 bg-gray-700 border border-gray-600 rounded text-gray-200 text-[10px] font-mono focus:outline-none focus:border-blue-500"
                 min="0"
                 step="100"
               />
             </div>
+            {stats.duplicatesFiltered > 0 && (
+              <span className="text-gray-600 text-[10px]">-{stats.duplicatesFiltered} dups</span>
+            )}
           </div>
-          <span className="text-green-400">
-            {stats.tradesPerSecond}/sec
+          <span className="text-[#00FF41] tabular-nums">
+            {stats.tradesPerSecond}/s
             {stats.avgTradesPerSecond > 0 && (
-              <span className="text-gray-500 ml-1">(avg: {stats.avgTradesPerSecond.toFixed(0)})</span>
+              <span className="text-gray-500 ml-1">(avg {stats.avgTradesPerSecond.toFixed(0)})</span>
             )}
           </span>
         </div>
       )}
       
-      <div className="flex bg-gray-800/50 border-b border-gray-700 sticky top-0 z-10 text-xs font-medium text-gray-400 uppercase tracking-wider">
-        <div className="w-24 px-3 py-2 text-left">Time</div>
-        <div className="w-24 px-3 py-2 text-right">Price</div>
-        <div className="w-24 px-3 py-2 text-right">Size</div>
-        <div className="w-24 px-3 py-2 text-right">Amount</div>
-        <div className="w-16 px-3 py-2 text-center">Side</div>
+      {/* Header row */}
+      <div className="flex bg-gray-800/50 border-b border-gray-700 text-[10px] font-medium text-gray-500 uppercase tracking-wider flex-shrink-0">
+        <div className="w-20 px-2 py-1.5 text-left">Time</div>
+        <div className="w-20 px-2 py-1.5 text-right">Price</div>
+        <div className="w-16 px-2 py-1.5 text-right">Size</div>
+        <div className="w-20 px-2 py-1.5 text-right">Amount</div>
+        <div className="w-12 px-2 py-1.5 text-center">Side</div>
         {showAnalytics && (
           <>
-            <div className="w-24 px-3 py-2 text-right">VWAP</div>
-            <div className="w-24 px-3 py-2 text-right">CVD $</div>
+            <div className="w-20 px-2 py-1.5 text-right">VWAP</div>
+            <div className="w-20 px-2 py-1.5 text-right">CVD $</div>
           </>
         )}
       </div>
       
+      {/* Virtualized trade list */}
       <div
         ref={containerRef}
-        className="time-sales-container flex-1 overflow-y-auto"
-        style={{ maxHeight, scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        className="flex-1 overflow-y-auto"
+        style={{ contain: 'strict' }}
       >
-        <style>{`.time-sales-container::-webkit-scrollbar { width: 0px; background: transparent; }`}</style>
-        {tradesToDisplay.map((trade) => (
-          <TradeRow
-            key={trade.id}
-            trade={trade}
-            assetType={assetType}
-            isNew={newTradeIds.has(trade.id)}
-            isAggregated={aggregatedIds.has(trade.id)}
-            onClick={onTradeClick ? () => onTradeClick(trade) : undefined}
-            showAnalytics={showAnalytics}
-          />
-        ))}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const trade = tradesToDisplay[virtualRow.index];
+            return (
+              <VirtualTradeRow
+                key={trade.id}
+                trade={trade}
+                assetType={assetType}
+                showAnalytics={showAnalytics}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
       
       {pauseScroll && tradesToDisplay.length > 0 && (

@@ -53,6 +53,10 @@ export class OPSCalculator {
     this.lastSampleTime = Date.now();
   }
 
+  getLastSampleTime(): number {
+    return this.lastSampleTime;
+  }
+
   getAverageOPS(): number {
     if (this.history.length === 0) return this.getCurrentOPS();
     return this.history.reduce((a, b) => a + b, 0) / this.history.length;

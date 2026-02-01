@@ -285,21 +285,24 @@ export const useMarketStore = create<MarketStore>()(
     
     /**
      * Handle incoming order book update
-     * Same deal as trades - goes to buffer, not React state
+     * 
+     * CRITICAL: We need to both push to buffer (for polling components)
+     * AND update state.orderBook (for components that read symbolState directly)
      */
     _handleOrderBook: (orderBook: OrderBook) => {
       pushOrderBook(orderBook);
       
-      // Ensure symbol state exists
       const { symbols } = get();
       const symbol = orderBook.symbol.toUpperCase();
       
-      if (!symbols.has(symbol)) {
-        const state: SymbolState = {
+      let state = symbols.get(symbol);
+      
+      if (!state) {
+        state = {
           symbol,
           assetType: orderBook.assetType,
           trades: [],
-          orderBook: null,
+          orderBook: orderBook,  // Set initial order book!
           isLoading: false,
           vwap: 0,
           totalBuyVolume: 0,
@@ -312,6 +315,12 @@ export const useMarketStore = create<MarketStore>()(
           lowPrice: 0,
         };
         symbols.set(symbol, state);
+        set({ symbols: new Map(symbols) });
+      } else {
+        // Update existing state's orderBook
+        state.orderBook = orderBook;
+        state.isLoading = false;
+        // Trigger re-render by creating new Map reference
         set({ symbols: new Map(symbols) });
       }
     },

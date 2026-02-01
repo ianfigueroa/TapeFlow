@@ -110,6 +110,10 @@ export class LayerManager {
     }
   }
 
+  getPendingData(): EngineData | null {
+    return this.pendingData;
+  }
+
   resize(width: number, height: number): void {
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = width * dpr;

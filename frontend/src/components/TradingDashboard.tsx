@@ -1,26 +1,32 @@
 /**
- * TradingDashboard - Professional single-screen trading terminal
+ * TradingDashboard - Professional Bento-box style trading terminal
  * 
- * Layout (3-column):
- * - Left: Tape + Analytics
- * - Center: Charts + Footprint + Heatmap
- * - Right: Order Book + Algo Signals + Volume Profile
+ * Responsive CSS Grid layout utilizing 100% viewport without main window scrolling.
  * 
- * Bottom bar: News ticker + Sentiment
+ * Layout (Bento-box grid):
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  TAPE          │  PRICE CHART (expanded)          │  ORDER BOOK     │
+ * │  (Time&Sales)  │                                  │  + IMBALANCE    │
+ * │                ├──────────────────────────────────┤                 │
+ * │                │  FOOTPRINT + CVD                 │                 │
+ * ├────────────────┼──────────────────────────────────┼─────────────────┤
+ * │  TABBED TOOLS (Analytics / News / Signals)       │  QUANT TOOLS    │
+ * │  (full height for readability)                   │  (OI, Liq Map)  │
+ * └─────────────────────────────────────────────────────────────────────┘
  */
 
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { cn } from '../lib/utils';
 import { TapeTable } from './TapeTable';
 import { OrderBook } from './OrderBook';
-import { OrderBookHeatmap } from './OrderBookHeatmap';
-import { AlgoSignals } from './AlgoSignals';
 import { ChartPanel } from './ChartPanel';
 import { FootprintChart } from './FootprintChart';
-import { SentimentPanel } from './SentimentPanel';
-import { NewsFeed } from './NewsFeed';
 import { VolumeProfile } from './VolumeProfile';
-import { AnalysisDashboard } from './dashboard/AnalysisDashboard';
+import { TabbedToolsPanel } from './TabbedToolsPanel';
+import { ImbalanceMeter } from './ImbalanceMeter';
+import { CVDOverlay } from './CVDOverlay';
+import { OIMonitor } from './OIMonitor';
+import { LiquidationHeatmap } from './LiquidationHeatmap';
 import { useSettingsStore } from '../stores/useSettingsStore';
 import type { SymbolState } from '../types';
 
@@ -42,7 +48,7 @@ const PanelHeader = memo(function PanelHeader({
   rightContent?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-800 bg-gray-900/30">
+    <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-800 bg-gray-900/30 flex-shrink-0">
       <div className="flex items-center gap-2">
         <span className={cn("text-xs font-mono font-semibold tracking-wider", color)}>
           {title}
@@ -56,19 +62,24 @@ const PanelHeader = memo(function PanelHeader({
   );
 });
 
-// Panel wrapper
+// Panel wrapper with proper flex/grid sizing
 const Panel = memo(function Panel({ 
   children, 
-  className
+  className,
+  gridArea,
 }: { 
   children: React.ReactNode; 
   className?: string;
+  gridArea?: string;
 }) {
   return (
-    <div className={cn(
-      "bg-black border border-gray-800 rounded overflow-hidden flex flex-col",
-      className
-    )}>
+    <div 
+      className={cn(
+        "bg-black border border-gray-800 rounded overflow-hidden flex flex-col min-h-0 min-w-0",
+        className
+      )}
+      style={gridArea ? { gridArea } : undefined}
+    >
       {children}
     </div>
   );
@@ -81,147 +92,143 @@ export const TradingDashboard = memo(function TradingDashboard({
   const visualization = useSettingsStore((state) => state.visualization);
   const showCharts = visualization.showPriceChart || visualization.showVolumeChart || visualization.showDeltaChart;
 
-  // Calculate column widths
-  const leftWidth = '22%';
-  const centerWidth = '40%';
-  const rightWidth = '38%';
+  // Get current price for liquidation heatmap
+  const currentPrice = useMemo(() => {
+    if (symbolData.trades.length > 0) {
+      return symbolData.trades[0].price;
+    }
+    if (symbolData.orderBook?.bids?.[0] && symbolData.orderBook?.asks?.[0]) {
+      return (symbolData.orderBook.bids[0].price + symbolData.orderBook.asks[0].price) / 2;
+    }
+    return 0;
+  }, [symbolData.trades, symbolData.orderBook]);
 
   return (
-    <div className="flex flex-col h-full bg-black gap-1 p-1">
-      {/* Main 3-column layout */}
-      <div className="flex-1 flex gap-1 min-h-0">
-        
-        {/* LEFT COLUMN: Tape + Analytics */}
-        <div className="flex flex-col gap-1" style={{ width: leftWidth }}>
-          {/* Time & Sales Tape */}
-          <Panel className="flex-1 min-h-0">
-            <PanelHeader 
-              title="TIME & SALES" 
-              color="text-[#00FF41]"
-              subtitle={`${symbolData.trades.length} trades`}
+    <div className="bento-dashboard">
+      {/* ═══════════════════════════════════════════════════════════════════
+          LEFT COLUMN: Time & Sales Tape
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Panel gridArea="tape" className="tape-panel">
+        <PanelHeader 
+          title="TIME & SALES" 
+          color="text-[#00FF41]"
+          subtitle={`${symbolData.trades.length} trades`}
+        />
+        <div className="flex-1 overflow-hidden min-h-0">
+          <TapeTable
+            trades={symbolData.trades}
+            assetType={symbolData.assetType}
+            symbol={symbolData.symbol}
+            pauseScroll={pauseScroll}
+            showAnalytics={false}
+            compact={true}
+          />
+        </div>
+      </Panel>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          CENTER TOP: Main Price/Volume Chart (expanded)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {showCharts && (
+        <Panel gridArea="chart" className="chart-panel">
+          <PanelHeader title="PRICE / VOLUME / VWAP" color="text-cyan-500" />
+          <div className="flex-1 overflow-hidden min-h-0">
+            <ChartPanel
+              trades={symbolData.trades}
+              symbol={symbolData.symbol}
+              width={800}
+              compact={false}
             />
-            <div className="flex-1 overflow-hidden">
-              <TapeTable
-                trades={symbolData.trades}
-                assetType={symbolData.assetType}
-                symbol={symbolData.symbol}
-                pauseScroll={pauseScroll}
-                showAnalytics={false}
-                compact={true}
-              />
-            </div>
-          </Panel>
+          </div>
+        </Panel>
+      )}
 
-          {/* Analytics Dashboard */}
-          <Panel className="h-[180px] flex-shrink-0">
-            <PanelHeader title="ANALYTICS" color="text-emerald-500" />
-            <div className="flex-1 overflow-hidden p-1">
-              <AnalysisDashboard symbol={symbolData.symbol} compact={true} />
-            </div>
-          </Panel>
+      {/* ═══════════════════════════════════════════════════════════════════
+          CENTER BOTTOM: Footprint + CVD
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Panel gridArea="footprint" className="footprint-panel">
+        <PanelHeader title="FOOTPRINT" color="text-purple-500" subtitle="BID × ASK" />
+        <div className="flex-1 overflow-hidden min-h-0">
+          <FootprintChart
+            symbol={symbolData.symbol}
+            trades={symbolData.trades}
+          />
         </div>
+      </Panel>
 
-        {/* CENTER COLUMN: Charts + Footprint + Heatmap */}
-        <div className="flex flex-col gap-1" style={{ width: centerWidth }}>
-          {/* Price Charts */}
-          {showCharts && (
-            <Panel className="h-[200px] flex-shrink-0">
-              <PanelHeader title="PRICE" color="text-cyan-500" />
-              <div className="flex-1 overflow-hidden">
-                <ChartPanel
-                  trades={symbolData.trades}
-                  symbol={symbolData.symbol}
-                  width={500}
-                  compact={true}
-                />
-              </div>
-            </Panel>
-          )}
+      <Panel gridArea="cvd" className="cvd-panel">
+        <CVDOverlay 
+          symbol={symbolData.symbol}
+          height={100}
+        />
+      </Panel>
 
-          {/* Footprint Chart */}
-          <Panel className="flex-1 min-h-[200px]">
-            <PanelHeader title="FOOTPRINT" color="text-purple-500" subtitle="BID x ASK" />
-            <div className="flex-1 overflow-hidden">
-              <FootprintChart
-                symbol={symbolData.symbol}
-                trades={symbolData.trades}
-              />
-            </div>
-          </Panel>
-
-          {/* Order Book Heatmap */}
-          {visualization.showHeatmap && (
-            <Panel className="h-[180px] flex-shrink-0">
-              <PanelHeader title="DEPTH HEATMAP" color="text-yellow-500" />
-              <div className="flex-1 overflow-hidden p-1">
-                <OrderBookHeatmap
-                  symbol={symbolData.symbol}
-                  height={140}
-                />
-              </div>
-            </Panel>
-          )}
-        </div>
-
-        {/* RIGHT COLUMN: Order Book + Signals + Volume Profile */}
-        <div className="flex flex-col gap-1" style={{ width: rightWidth }}>
-          {/* Order Book */}
-          <Panel className="flex-1 min-h-[250px]">
-            <PanelHeader 
-              title="ORDER BOOK" 
-              color="text-orange-500"
-              subtitle="L2 Depth"
+      {/* ═══════════════════════════════════════════════════════════════════
+          RIGHT TOP: Order Book + Imbalance Meter
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Panel gridArea="orderbook" className="orderbook-panel">
+        <PanelHeader 
+          title="ORDER BOOK" 
+          color="text-orange-500"
+          subtitle="L2 Depth"
+        />
+        <div className="flex-1 overflow-hidden min-h-0 flex">
+          {/* Main OrderBook */}
+          <div className="flex-1 min-w-0">
+            <OrderBook
+              orderBook={symbolData.orderBook}
+              assetType={symbolData.assetType}
+              symbol={symbolData.symbol}
+              showHeatmap={true}
+              maxLevels={15}
             />
-            <div className="flex-1 overflow-hidden">
-              <OrderBook
-                orderBook={symbolData.orderBook}
-                assetType={symbolData.assetType}
-                symbol={symbolData.symbol}
-                showHeatmap={true}
-                maxLevels={12}
-              />
-            </div>
-          </Panel>
-
-          {/* Algo Signals */}
-          <Panel className="h-[160px] flex-shrink-0">
-            <PanelHeader title="ALGO SIGNALS" color="text-[#00FF41]" />
-            <div className="flex-1 overflow-hidden">
-              <AlgoSignals
-                symbol={symbolData.symbol}
-                velocitySpike={300}
-                compact={true}
-              />
-            </div>
-          </Panel>
-
-          {/* Volume Profile */}
-          <Panel className="h-[180px] flex-shrink-0">
-            <PanelHeader title="VOLUME PROFILE" color="text-blue-500" subtitle="POC / VAH / VAL" />
-            <div className="flex-1 overflow-hidden">
-              <VolumeProfile symbol={symbolData.symbol} compact={true} />
-            </div>
-          </Panel>
+          </div>
+          {/* Imbalance Meter sidebar */}
+          <div className="w-20 border-l border-gray-800 flex-shrink-0">
+            <ImbalanceMeter
+              orderBook={symbolData.orderBook}
+              levels={10}
+              orientation="vertical"
+              showLabels={true}
+            />
+          </div>
         </div>
+      </Panel>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          RIGHT MIDDLE: Volume Profile
+          ═══════════════════════════════════════════════════════════════════ */}
+      <Panel gridArea="profile" className="profile-panel">
+        <PanelHeader title="VOLUME PROFILE" color="text-blue-500" subtitle="POC / VAH / VAL" />
+        <div className="flex-1 overflow-hidden min-h-0">
+          <VolumeProfile symbol={symbolData.symbol} compact={false} />
+        </div>
+      </Panel>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          BOTTOM LEFT: Tabbed Tools Panel (Analytics, News, Signals)
+          With proper height for readability
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="tabbed-panel" style={{ gridArea: 'tools' }}>
+        <TabbedToolsPanel symbol={symbolData.symbol} />
       </div>
 
-      {/* BOTTOM BAR: News + Sentiment */}
-      <div className="h-[100px] flex gap-1 flex-shrink-0">
-        {/* News Ticker */}
-        <Panel className="flex-1">
-          <PanelHeader title="NEWS" color="text-blue-400" />
-          <div className="flex-1 overflow-hidden">
-            <NewsFeed symbol={symbolData.symbol} compact={true} />
+      {/* ═══════════════════════════════════════════════════════════════════
+          BOTTOM RIGHT: Quant Tools Stack (OI Monitor, Liquidation Heatmap)
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="quant-panel" style={{ gridArea: 'quant' }}>
+        <div className="flex flex-col gap-1 h-full">
+          <div className="flex-1 min-h-0">
+            <OIMonitor symbol={symbolData.symbol} className="h-full" />
           </div>
-        </Panel>
-
-        {/* Sentiment */}
-        <Panel className="w-[280px] flex-shrink-0">
-          <PanelHeader title="SENTIMENT" color="text-[#00FF41]" />
-          <div className="flex-1 overflow-hidden">
-            <SentimentPanel symbol={symbolData.symbol} compact={true} />
+          <div className="flex-1 min-h-0">
+            <LiquidationHeatmap 
+              symbol={symbolData.symbol} 
+              currentPrice={currentPrice}
+              className="h-full"
+            />
           </div>
-        </Panel>
+        </div>
       </div>
     </div>
   );
