@@ -14,7 +14,7 @@
  * - Volume normalization for cross-asset comparison
  */
 
-import type { Trade, OrderBook } from '../../types';
+import type { Trade } from '../../types';
 
 export type LargeTradeSignalType = 
   | 'block'       // Single large trade

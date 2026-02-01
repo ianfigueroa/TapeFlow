@@ -140,7 +140,7 @@ export class NewsAdapter {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
     
-    const data = await response.json();
+    const data = await response.json() as { Response?: string; Message?: string; Data?: unknown[] };
     
     if (data.Response === 'Error') {
       throw new Error(data.Message || 'Unknown API error');
