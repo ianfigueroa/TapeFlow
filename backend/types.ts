@@ -152,10 +152,11 @@ export interface ClientMessage {
  * - orderbook: OrderBook  
  * - ticker: Ticker
  * - validation: SymbolInfo
+ * - news: NewsItem
  */
 export interface ServerMessage {
-  type: 'trade' | 'orderbook' | 'ticker' | 'validation' | 'error' | 'connected' | 'subscribed' | 'unsubscribed' | 'pong';
-  data?: Trade | OrderBook | Ticker | SymbolInfo | SymbolInfo[];
+  type: 'trade' | 'orderbook' | 'ticker' | 'validation' | 'error' | 'connected' | 'subscribed' | 'unsubscribed' | 'pong' | 'news';
+  data?: Trade | OrderBook | Ticker | SymbolInfo | SymbolInfo[] | unknown;
   symbol?: string;
   error?: string;
   timestamp?: number;
