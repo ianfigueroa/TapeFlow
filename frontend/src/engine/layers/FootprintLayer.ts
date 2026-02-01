@@ -5,16 +5,6 @@ import type { EngineData, FootprintCluster } from '../types';
 const MAX_CLUSTERS = 30; // Fewer clusters for better visibility
 const DEFAULT_INTERVAL_MS = 15000; // 15 seconds for faster cluster formation
 
-// Dynamic tick sizes based on asset price
-const TICK_SIZE_PRESETS: { [key: string]: number } = {
-  BTC: 10,
-  ETH: 1,
-  SOL: 0.1,
-  DEFAULT_HIGH: 10,    // Price > 1000
-  DEFAULT_MED: 0.1,    // Price 10-1000
-  DEFAULT_LOW: 0.001,  // Price < 10
-};
-
 export class FootprintLayer implements Layer {
   readonly id = 'footprint';
 

@@ -10,8 +10,6 @@ import { RealTimeClock } from './RealTimeClock';
 import { ModeToggle, type DataMode } from './ModeToggle';
 import { ThemeToggle } from './ThemeToggle';
 import { SettingsPanel } from './SettingsPanel';
-import { PaperTradingPanel } from './controls/PaperTradingPanel';
-import { ReplayControls } from './controls/ReplayControls';
 import { HotkeysPanel } from './HotkeysPanel';
 import { AlertsPanel, AlertToastContainer } from './AlertsPanel';
 import { useMarketStore } from '../stores/useMarketStore';
@@ -45,18 +43,6 @@ const SettingsIcon = () => (
   </svg>
 );
 
-const DollarIcon = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
-const RewindIcon = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.333 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" />
-  </svg>
-);
-
 const TrashIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -78,8 +64,6 @@ const BellIcon = () => (
 export function DashboardLayout() {
   const [showSymbolSelector, setShowSymbolSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showPaperTrading, setShowPaperTrading] = useState(false);
-  const [showReplay, setShowReplay] = useState(false);
   const [showHotkeys, setShowHotkeys] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
   const [dataMode, setDataMode] = useState<DataMode>('LIVE');
@@ -197,12 +181,6 @@ export function DashboardLayout() {
         if (selectedSymbol) {
           removeTab(selectedSymbol);
         }
-        return;
-      }
-      
-      // P - Toggle paper trading
-      if (e.key === 'p' && !e.ctrlKey && !e.metaKey) {
-        setShowPaperTrading(prev => !prev);
         return;
       }
       
@@ -328,37 +306,6 @@ export function DashboardLayout() {
             </button>
 
             <button
-              onClick={() => setShowPaperTrading(!showPaperTrading)}
-              className={cn(
-                "p-1.5 rounded border transition-colors",
-                showPaperTrading
-                  ? "border-[#A855F7] text-[#A855F7]"
-                  : "text-gray-600 hover:text-gray-400"
-              )}
-              style={{ borderColor: showPaperTrading ? '#A855F7' : 'var(--tf-border-primary)' }}
-              title="Paper Trading"
-            >
-              <DollarIcon />
-            </button>
-
-            <button
-              onClick={() => setShowReplay(!showReplay)}
-              className={cn(
-                "p-1.5 rounded border transition-colors",
-                showReplay
-                  ? ""
-                  : "text-gray-600 hover:text-gray-400"
-              )}
-              style={{ 
-                borderColor: showReplay ? 'var(--tf-accent-info)' : 'var(--tf-border-primary)',
-                color: showReplay ? 'var(--tf-accent-info)' : undefined
-              }}
-              title="Replay"
-            >
-              <RewindIcon />
-            </button>
-
-            <button
               onClick={() => setShowSettings(!showSettings)}
               className="p-1.5 rounded border text-gray-600 hover:text-gray-400 transition-colors"
               style={{ borderColor: 'var(--tf-border-primary)' }}
@@ -469,24 +416,6 @@ export function DashboardLayout() {
       {showSettings && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
           <SettingsPanel onClose={() => setShowSettings(false)} />
-        </div>
-      )}
-
-      {showPaperTrading && currentSymbolData && (
-        <div className="fixed top-16 right-4 z-40">
-          <PaperTradingPanel
-            symbol={currentSymbolData.symbol}
-            currentPrice={currentSymbolData.lastPrice}
-            bestBid={currentSymbolData.orderBook?.bids[0]?.price || 0}
-            bestAsk={currentSymbolData.orderBook?.asks[0]?.price || 0}
-            onClose={() => setShowPaperTrading(false)}
-          />
-        </div>
-      )}
-
-      {showReplay && currentSymbolData && (
-        <div className="fixed bottom-4 left-4 z-40">
-          <ReplayControls symbol={currentSymbolData.symbol} className="w-72" />
         </div>
       )}
 

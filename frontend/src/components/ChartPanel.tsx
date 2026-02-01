@@ -21,6 +21,8 @@ const TIME_INTERVALS = [
   { label: '4H', value: 14400000, display: '4 HOUR' },
 ] as const;
 
+type TimeInterval = typeof TIME_INTERVALS[number];
+
 // Chart view types
 type ChartView = 'candlestick' | 'heikin-ashi' | 'line';
 
@@ -134,7 +136,7 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
   const visualization = useSettingsStore((state) => state.visualization);
   const [bufferTrades, setBufferTrades] = useState<TradeWithAnalytics[]>([]);
   const [autoScaleKey, setAutoScaleKey] = useState(0);
-  const [selectedInterval, setSelectedInterval] = useState(TIME_INTERVALS[0]); // Default 15s
+  const [selectedInterval, setSelectedInterval] = useState<TimeInterval>(TIME_INTERVALS[0]); // Default 15s
   const [chartView, setChartView] = useState<ChartView>('candlestick');
   const [visibleCandles, setVisibleCandles] = useState(100); // Zoom level
   const candleHistoryRef = useRef<CandleDataPoint[]>([]);
