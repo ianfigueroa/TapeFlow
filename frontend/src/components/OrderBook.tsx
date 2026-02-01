@@ -138,7 +138,7 @@ const OrderBookRow = memo(function OrderBookRow({
   const isBid = side === 'bid';
   
   return (
-    <div className="relative grid grid-cols-2 gap-1 px-1 py-1 text-xs font-mono hover:bg-gray-900/50 overflow-hidden">
+    <div className="relative grid grid-cols-2 gap-0.5 px-0.5 py-0.5 text-[10px] font-mono hover:bg-gray-900/50 overflow-hidden">
       {showHeatmap && <HeatmapBar intensity={intensity} side={side} />}
       {isBid ? (
         <>
@@ -175,7 +175,7 @@ const OrderBookSide = memo(function OrderBookSide({
   return (
     <div className="flex-1 min-w-0 overflow-hidden">
       <div className={cn(
-        "grid grid-cols-2 gap-1 px-1 py-1.5 text-[10px] font-mono uppercase tracking-wider border-b border-gray-800",
+        "grid grid-cols-2 gap-0.5 px-0.5 py-1 text-[9px] font-mono uppercase tracking-wider border-b border-gray-800",
         isBid ? "text-[#00FF41]" : "text-[#FF4545]"
       )}>
         {isBid ? (
