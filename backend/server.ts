@@ -5,7 +5,7 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { BinanceAdapter } from './adapters';
+import { BinanceAdapter, NewsAdapter } from './adapters';
 import { Trade, OrderBook, Ticker, ClientMessage, ServerMessage } from './types';
 
 dotenv.config();
@@ -24,6 +24,9 @@ app.use(express.json());
 
 // Singleton adapter - we reuse one connection to Binance for all clients
 let binanceAdapter: BinanceAdapter | null = null;
+
+// News adapter singleton
+const newsAdapter = new NewsAdapter();
 
 // Track what each client is subscribed to so we can clean up properly
 const clientSubscriptions: Map<WebSocket, Set<string>> = new Map();
@@ -329,8 +332,57 @@ app.get('/api/info', (req, res) => {
       'Real-time trades',
       'Level 2 order book (20 levels)',
       '24hr ticker statistics',
+      'Cryptocurrency news feed',
     ],
   });
+});
+
+// News endpoint - fetch crypto news by symbol
+app.get('/api/news/:symbol?', async (req, res) => {
+  try {
+    const symbol = req.params.symbol || 'BTC';
+    const forceRefresh = req.query.refresh === 'true';
+    
+    const news = await newsAdapter.getNews(symbol, forceRefresh);
+    
+    res.json({
+      symbol: symbol.toUpperCase().replace('USDT', ''),
+      count: news.length,
+      items: news,
+      cached: !forceRefresh,
+      timestamp: Date.now(),
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to fetch news',
+      message: error.message,
+      timestamp: Date.now(),
+    });
+  }
+});
+
+// News stats endpoint
+app.get('/api/news-stats', (req, res) => {
+  res.json({
+    ...newsAdapter.getStats(),
+    timestamp: Date.now(),
+  });
+});
+
+// Wire up news broadcaster to WebSocket
+newsAdapter.onNews((item) => {
+  const message: ServerMessage = {
+    type: 'news',
+    data: item,
+    timestamp: Date.now(),
+  };
+  
+  // Broadcast to all connected clients
+  for (const [client, _] of clientSubscriptions) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(message));
+    }
+  }
 });
 
 // Fire it up
