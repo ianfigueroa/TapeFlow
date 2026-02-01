@@ -76,8 +76,8 @@ function VolumeBar({
   return (
     <div className={cn(
       "flex items-center gap-1 h-5 group",
-      isPoc && "bg-yellow-500/10",
-      isCurrentPrice && "bg-blue-500/10"
+      isPoc && "bg-yellow-500/20 border-l-2 border-yellow-400",
+      isCurrentPrice && !isPoc && "bg-blue-500/10"
     )}>
       {/* Price label */}
       <div className={cn(
@@ -161,17 +161,18 @@ export const VolumeProfile = memo(function VolumeProfile({
     }
     
     if (!calculatorRef.current) {
-      // Determine tick size based on symbol - use smaller ticks for granular profile
-      let tickSize = 1;
+      // Determine tick size based on symbol - finer granularity for more visible rows
+      // Use smaller ticks than DOM Ladder since we want to see volume distribution detail
+      let tickSize = 0.5;
       const upperSymbol = symbol.toUpperCase();
-      if (upperSymbol.includes('BTC')) tickSize = 1;  // $1 ticks for BTC (was $10)
-      else if (upperSymbol.includes('ETH')) tickSize = 0.5;  // $0.50 ticks for ETH (was $1)
-      else if (upperSymbol.includes('SOL')) tickSize = 0.05;  // $0.05 ticks for SOL (was $0.10)
+      if (upperSymbol.includes('BTC')) tickSize = 0.5;   // $0.50 ticks for BTC (finer than DOM)
+      else if (upperSymbol.includes('ETH')) tickSize = 0.1;  // $0.10 ticks for ETH
+      else if (upperSymbol.includes('SOL')) tickSize = 0.01; // $0.01 ticks for SOL
       else tickSize = 0.01;
       
       calculatorRef.current = new VolumeProfileCalculator({
         tickSize,
-        rowCount: 100,  // Increased from 50 for more detail
+        rowCount: 200,  // More rows for finer distribution
         valueAreaPercent: 70,
       });
     }
