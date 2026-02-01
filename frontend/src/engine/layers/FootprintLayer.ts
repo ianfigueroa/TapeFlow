@@ -3,7 +3,7 @@ import type { RenderContext } from '../RenderContext';
 import type { EngineData, FootprintCluster } from '../types';
 
 const MAX_CLUSTERS = 30; // Fewer clusters for better visibility
-const DEFAULT_INTERVAL_MS = 30000; // 30 seconds for more meaningful clusters
+const DEFAULT_INTERVAL_MS = 15000; // 15 seconds for faster cluster formation
 
 // Dynamic tick sizes based on asset price
 const TICK_SIZE_PRESETS: { [key: string]: number } = {
@@ -453,9 +453,10 @@ export class FootprintLayer implements Layer {
         const label = `${bidStr}×${askStr}`;
         const textWidth = ctx.measureText(label).width;
         
-        // Only show labels if they fit or if it's a significant level
+        // Show labels for any level with volume (no threshold)
+        // Only hide if text won't fit AND it's not significant
         const fitsInRow = textWidth < halfWidth * 1.8;
-        const isSignificant = totalVolume > maxVol * 0.1 || isPoc;
+        const isSignificant = totalVolume > maxVol * 0.05 || isPoc; // Lowered from 0.1 to 0.05
         
         if (fitsInRow && isSignificant) {
           ctx.textAlign = 'center';
