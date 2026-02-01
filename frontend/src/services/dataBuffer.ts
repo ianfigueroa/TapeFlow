@@ -2,8 +2,9 @@
 
 import type { Trade, OrderBook, Ticker, TradeWithAnalytics } from '../types';
 
-const MAX_BUFFER = 1000;
-const MAX_VISIBLE = 100;
+const MAX_BUFFER = 5000;  // Store 5000 trades for chart history
+const MAX_VISIBLE = 100;  // Display limit for Time & Sales
+const MAX_CHART_TRADES = 2000;  // Trades available for chart candle building
 
 // Trade rate tracking - Sliding Window OPS Counter
 // Stores individual trade timestamps and calculates OPS on-demand by filtering
@@ -202,6 +203,11 @@ export function flushTradeBuffer(symbol: string) {
 
 export function getDisplayTrades(symbol: string): TradeWithAnalytics[] {
   return getTradeBuffer(symbol).processed.slice(0, MAX_VISIBLE);
+}
+
+// Get more trades for chart candle building (larger buffer than display)
+export function getChartTrades(symbol: string): TradeWithAnalytics[] {
+  return getTradeBuffer(symbol).processed.slice(0, MAX_CHART_TRADES);
 }
 
 export function setProcessedTrades(symbol: string, trades: TradeWithAnalytics[]): void {

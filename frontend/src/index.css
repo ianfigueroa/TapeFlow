@@ -1,3 +1,8 @@
+/* Import FlexLayout theme - must come before Tailwind */
+@import 'flexlayout-react/style/dark.css';
+@import './styles/flexlayout-theme.css';
+@import './styles/themes.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -18,9 +23,98 @@
    ============================================================================ */
 
 /* ============================================================================
+   REACT-GRID-LAYOUT STYLES
+   User-resizable draggable grid panels
+   ============================================================================ */
+
+/* Grid container styling */
+.layout {
+  background-color: #000000;
+}
+
+/* Grid item styling - fill height/width and support flex children */
+.react-grid-item {
+  background-color: transparent;
+  overflow: hidden;
+  transition: none !important;
+}
+
+/* Grid item content should fill available space */
+.react-grid-item > .grid-item {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.react-grid-item > .grid-item > * {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Placeholder during drag/resize */
+.react-grid-placeholder {
+  background-color: #00FF41 !important;
+  opacity: 0.15 !important;
+  border: 2px dashed #00FF41 !important;
+  border-radius: 4px;
+}
+
+/* Resize handle styling */
+.react-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.react-grid-item:hover .react-resizable-handle {
+  opacity: 0.6;
+}
+
+.react-resizable-handle::after {
+  border-color: #00FF41 !important;
+}
+
+/* Drag handle styling */
+.drag-handle {
+  cursor: move;
+  user-select: none;
+  padding: 2px 4px;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.drag-handle:hover {
+  color: #00FF41 !important;
+}
+
+/* Dragging state */
+.react-grid-item.react-draggable-dragging {
+  z-index: 100;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+}
+
+/* Resizing state */
+.react-grid-item.resizing {
+  z-index: 100;
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+}
+
+/* ============================================================================
    BENTO-BOX DASHBOARD GRID LAYOUT
    Professional trading terminal utilizing 100% viewport
    ============================================================================ */
+
+/* Grid area class assignments */
+.bento-tape { grid-area: tape; min-height: 0; min-width: 0; }
+.bento-chart { grid-area: chart; min-height: 0; min-width: 0; }
+.bento-footprint { grid-area: footprint; min-height: 0; min-width: 0; }
+.bento-cvd { grid-area: cvd; min-height: 0; min-width: 0; }
+.bento-orderbook { grid-area: orderbook; min-height: 0; min-width: 0; }
+.bento-profile { grid-area: profile; min-height: 0; min-width: 0; }
+.bento-tools { grid-area: tools; min-height: 0; min-width: 0; }
+.bento-quant { grid-area: quant; min-height: 0; min-width: 0; }
 
 .bento-dashboard {
   display: grid;
@@ -40,8 +134,8 @@
    * │          tools              │   quant    │
    * └─────────────────────────────┴────────────┘
    */
-  grid-template-columns: minmax(220px, 1fr) minmax(300px, 2fr) minmax(100px, 0.5fr) minmax(280px, 1.2fr);
-  grid-template-rows: minmax(200px, 1.5fr) minmax(150px, 1fr) minmax(280px, 1.2fr);
+  grid-template-columns: minmax(200px, 0.8fr) minmax(300px, 2fr) minmax(200px, 1fr) minmax(280px, 1.2fr);
+  grid-template-rows: minmax(250px, 2fr) minmax(180px, 1fr) minmax(200px, 1fr);
   grid-template-areas:
     "tape chart chart orderbook"
     "tape footprint cvd profile"
@@ -106,6 +200,40 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure chart containers fill their space */
+.chart-panel > *,
+.footprint-panel > *,
+.cvd-panel > *,
+.profile-panel > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Chart wrapper should expand to fill container */
+.chart-panel > div:last-child,
+.footprint-panel > div:last-child,
+.cvd-panel > div:last-child,
+.profile-panel > div:last-child {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex-grow: 1;
+}
+
+/* Canvas and SVG charts should fill their wrappers */
+.chart-panel canvas,
+.footprint-panel canvas,
+.cvd-panel canvas,
+.profile-panel canvas,
+.chart-panel svg,
+.footprint-panel svg {
+  width: 100% !important;
+  height: 100% !important;
+  flex-grow: 1;
 }
 
 .tabbed-panel,
@@ -142,9 +270,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Force all root containers to pure black */
+/* Ensure full height chain from html to app */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Force all root containers to pure black and full height */
 #root, .app-container, main {
   background-color: #000000;
+  height: 100%;
 }
 
 /* ============================================================================

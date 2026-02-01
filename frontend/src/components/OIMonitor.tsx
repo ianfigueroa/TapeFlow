@@ -12,6 +12,7 @@
 
 import { useState, useEffect, memo, useRef, useCallback } from 'react';
 import { cn } from '../lib/utils';
+import { LabelWithTooltip } from './Tooltip';
 
 interface OIDataPoint {
   timestamp: number;
@@ -32,9 +33,6 @@ const POLL_INTERVAL_MS = 5000;
 
 // Keep 1 hour of history (720 data points at 5 second intervals)
 const MAX_HISTORY_POINTS = 720;
-
-// 5 minute window for delta calculation (60 data points)
-const FIVE_MIN_POINTS = 60;
 
 // Sparkline component for OI trend
 function Sparkline({ 
@@ -113,6 +111,19 @@ export const OIMonitor = memo(function OIMonitor({
   const [delta5mPercent, setDelta5mPercent] = useState<number>(0);
   const [deltaHour, setDeltaHour] = useState<number>(0);
   const [deltaHourPercent, setDeltaHourPercent] = useState<number>(0);
+  
+  // === USEREF FOR IMMEDIATE DELTA TRACKING ===
+  // Store the previous OI values at specific time intervals for delta calculation
+  // This ensures deltas work even on first load by storing reference points
+  const previousOIRef = useRef<{
+    lastValue: number | null;
+    fiveMinAgo: { value: number; timestamp: number } | null;
+    oneHourAgo: { value: number; timestamp: number } | null;
+  }>({
+    lastValue: null,
+    fiveMinAgo: null,
+    oneHourAgo: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -191,13 +202,13 @@ export const OIMonitor = memo(function OIMonitor({
         const newOI = await fetchOpenInterest(symbol);
         if (newOI === null || !mounted) return;
 
-        const now = Date.now();
+        const pollTime = Date.now();
         
         // Update history
         setOiHistory(prev => {
-          const newHistory = [...prev, { timestamp: now, value: newOI }];
+          const newHistory = [...prev, { timestamp: pollTime, value: newOI }];
           // Keep only last hour of data
-          const oneHourAgo = now - 3600000;
+          const oneHourAgo = pollTime - 3600000;
           const filtered = newHistory.filter(p => p.timestamp > oneHourAgo);
           return filtered.slice(-MAX_HISTORY_POINTS);
         });
@@ -205,6 +216,31 @@ export const OIMonitor = memo(function OIMonitor({
         setCurrentOI(newOI);
         setIsLoading(false);
         setError(null);
+        
+        // === UPDATE REF-BASED DELTA TRACKING ===
+        const prevRef = previousOIRef.current;
+        
+        // On first value, initialize all reference points
+        if (prevRef.lastValue === null) {
+          prevRef.lastValue = newOI;
+          prevRef.fiveMinAgo = { value: newOI, timestamp: pollTime };
+          prevRef.oneHourAgo = { value: newOI, timestamp: pollTime };
+        } else {
+          prevRef.lastValue = newOI;
+        }
+        
+        // Update 5-min reference point if it's been >= 5 minutes since last update
+        if (prevRef.fiveMinAgo && (pollTime - prevRef.fiveMinAgo.timestamp) >= 300000) {
+          // Shift: the "new" 5-min-ago value becomes the current value 
+          // This gives us accurate rolling 5-min deltas
+          prevRef.fiveMinAgo = { value: newOI, timestamp: pollTime };
+        }
+        
+        // Update 1-hour reference point if it's been >= 1 hour since last update
+        if (prevRef.oneHourAgo && (pollTime - prevRef.oneHourAgo.timestamp) >= 3600000) {
+          prevRef.oneHourAgo = { value: newOI, timestamp: pollTime };
+        }
+        
       } catch (err: unknown) {
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Failed to fetch OI');
@@ -228,9 +264,9 @@ export const OIMonitor = memo(function OIMonitor({
     };
   }, [symbol, fetchOpenInterest]);
   
-  // Calculate deltas from history
+  // Calculate deltas from both history AND refs for immediate values
   useEffect(() => {
-    if (oiHistory.length < 2 || currentOI === null) {
+    if (currentOI === null) {
       setDelta5m(0);
       setDelta5mPercent(0);
       setDeltaHour(0);
@@ -239,23 +275,57 @@ export const OIMonitor = memo(function OIMonitor({
     }
     
     const now = Date.now();
-    const fiveMinAgo = now - 300000; // 5 minutes
-    const oneHourAgo = now - 3600000; // 1 hour
+    const prevRef = previousOIRef.current;
     
-    // Find value from 5 minutes ago
-    const fiveMinPoint = oiHistory.find(p => p.timestamp >= fiveMinAgo);
-    if (fiveMinPoint) {
-      const change = currentOI - fiveMinPoint.value;
-      setDelta5m(change);
-      setDelta5mPercent(fiveMinPoint.value > 0 ? (change / fiveMinPoint.value) * 100 : 0);
+    // === 5 MINUTE DELTA ===
+    // Try history first, then fall back to refs
+    let fiveMinValue: number | null = null;
+    
+    if (oiHistory.length > 0) {
+      const fiveMinAgo = now - 300000;
+      const fiveMinPoint = oiHistory.find(p => p.timestamp >= fiveMinAgo);
+      if (fiveMinPoint) {
+        fiveMinValue = fiveMinPoint.value;
+      }
     }
     
-    // Find value from 1 hour ago (oldest point)
-    const hourPoint = oiHistory.find(p => p.timestamp >= oneHourAgo) || oiHistory[0];
-    if (hourPoint) {
-      const change = currentOI - hourPoint.value;
+    // Fallback to ref-based delta if history is insufficient
+    if (fiveMinValue === null && prevRef.fiveMinAgo) {
+      fiveMinValue = prevRef.fiveMinAgo.value;
+    }
+    
+    if (fiveMinValue !== null) {
+      const change = currentOI - fiveMinValue;
+      setDelta5m(change);
+      setDelta5mPercent(fiveMinValue > 0 ? (change / fiveMinValue) * 100 : 0);
+    } else {
+      setDelta5m(0);
+      setDelta5mPercent(0);
+    }
+    
+    // === 1 HOUR DELTA ===
+    let oneHourValue: number | null = null;
+    
+    if (oiHistory.length > 0) {
+      const oneHourAgo = now - 3600000;
+      const hourPoint = oiHistory.find(p => p.timestamp >= oneHourAgo) || oiHistory[0];
+      if (hourPoint) {
+        oneHourValue = hourPoint.value;
+      }
+    }
+    
+    // Fallback to ref-based delta
+    if (oneHourValue === null && prevRef.oneHourAgo) {
+      oneHourValue = prevRef.oneHourAgo.value;
+    }
+    
+    if (oneHourValue !== null) {
+      const change = currentOI - oneHourValue;
       setDeltaHour(change);
-      setDeltaHourPercent(hourPoint.value > 0 ? (change / hourPoint.value) * 100 : 0);
+      setDeltaHourPercent(oneHourValue > 0 ? (change / oneHourValue) * 100 : 0);
+    } else {
+      setDeltaHour(0);
+      setDeltaHourPercent(0);
     }
   }, [oiHistory, currentOI]);
 
@@ -269,6 +339,13 @@ export const OIMonitor = memo(function OIMonitor({
     setDeltaHourPercent(0);
     setIsLoading(true);
     setError(null);
+    
+    // Reset refs
+    previousOIRef.current = {
+      lastValue: null,
+      fiveMinAgo: null,
+      oneHourAgo: null,
+    };
   }, [symbol]);
   
   // Get sparkline data (just the values)
@@ -368,7 +445,7 @@ export const OIMonitor = memo(function OIMonitor({
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-800 bg-gray-900/30 flex-shrink-0">
         <span className="text-xs font-mono font-semibold text-yellow-500 tracking-wider">
-          OPEN INTEREST
+          <LabelWithTooltip label="OPEN INTEREST" term="Open Interest" />
         </span>
         <span className="text-[10px] text-gray-600 font-mono">
           {symbol.toUpperCase()}

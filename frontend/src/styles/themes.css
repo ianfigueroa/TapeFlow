@@ -1,0 +1,325 @@
+/**
+ * TapeFlow Theme System
+ * Professional trading terminal themes with CSS variables
+ */
+
+/* ============================================================================
+   ROOT THEME VARIABLES
+   These provide the default "hacker" theme
+   ============================================================================ */
+
+:root {
+  /* === HACKER THEME (Default) === */
+  --tf-bg-primary: #000000;
+  --tf-bg-secondary: #0a0a0a;
+  --tf-bg-tertiary: #111111;
+  --tf-bg-hover: #1a1a1a;
+  --tf-bg-active: #002200;
+  
+  /* Borders */
+  --tf-border-primary: #1f1f1f;
+  --tf-border-secondary: #333333;
+  --tf-border-accent: #00FF00;
+  
+  /* Text Colors */
+  --tf-text-primary: #ffffff;
+  --tf-text-secondary: #cccccc;
+  --tf-text-muted: #666666;
+  --tf-text-disabled: #444444;
+  
+  /* Trading Colors - Vibrant Hacker Green/Red */
+  --tf-buy: #00FF00;
+  --tf-buy-dim: #00CC00;
+  --tf-buy-bg: rgba(0, 255, 0, 0.1);
+  --tf-buy-bg-intense: rgba(0, 255, 0, 0.2);
+  
+  --tf-sell: #FF0000;
+  --tf-sell-dim: #CC0000;
+  --tf-sell-bg: rgba(255, 0, 0, 0.1);
+  --tf-sell-bg-intense: rgba(255, 0, 0, 0.2);
+  
+  /* Accent Colors */
+  --tf-accent-primary: #00FF00;
+  --tf-accent-secondary: #00FF41;
+  --tf-accent-warning: #FFAA00;
+  --tf-accent-info: #00FFFF;
+  --tf-accent-purple: #A855F7;
+  
+  /* Chart Colors */
+  --tf-chart-grid: #1a1a1a;
+  --tf-chart-axis: #333333;
+  --tf-chart-crosshair: #00FF00;
+  
+  /* Shadows & Glows */
+  --tf-glow-buy: 0 0 10px rgba(0, 255, 0, 0.5);
+  --tf-glow-sell: 0 0 10px rgba(255, 0, 0, 0.5);
+  --tf-glow-accent: 0 0 15px rgba(0, 255, 0, 0.3);
+  
+  /* Font */
+  --tf-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ============================================================================
+   PRO THEME (Alternative - Softer Colors)
+   Applied when .theme-pro class is on root
+   ============================================================================ */
+
+.theme-pro {
+  --tf-bg-primary: #0d1117;
+  --tf-bg-secondary: #161b22;
+  --tf-bg-tertiary: #21262d;
+  --tf-bg-hover: #30363d;
+  --tf-bg-active: #1f3a2d;
+  
+  /* Borders */
+  --tf-border-primary: #30363d;
+  --tf-border-secondary: #484f58;
+  --tf-border-accent: #238636;
+  
+  /* Text Colors */
+  --tf-text-primary: #f0f6fc;
+  --tf-text-secondary: #c9d1d9;
+  --tf-text-muted: #8b949e;
+  --tf-text-disabled: #6e7681;
+  
+  /* Trading Colors - Softer Professional */
+  --tf-buy: #3fb950;
+  --tf-buy-dim: #238636;
+  --tf-buy-bg: rgba(63, 185, 80, 0.15);
+  --tf-buy-bg-intense: rgba(63, 185, 80, 0.25);
+  
+  --tf-sell: #f85149;
+  --tf-sell-dim: #da3633;
+  --tf-sell-bg: rgba(248, 81, 73, 0.15);
+  --tf-sell-bg-intense: rgba(248, 81, 73, 0.25);
+  
+  /* Accent Colors */
+  --tf-accent-primary: #58a6ff;
+  --tf-accent-secondary: #79c0ff;
+  --tf-accent-warning: #d29922;
+  --tf-accent-info: #58a6ff;
+  --tf-accent-purple: #a371f7;
+  
+  /* Chart Colors */
+  --tf-chart-grid: #21262d;
+  --tf-chart-axis: #484f58;
+  --tf-chart-crosshair: #58a6ff;
+  
+  /* Shadows & Glows */
+  --tf-glow-buy: 0 0 8px rgba(63, 185, 80, 0.4);
+  --tf-glow-sell: 0 0 8px rgba(248, 81, 73, 0.4);
+  --tf-glow-accent: 0 0 12px rgba(88, 166, 255, 0.3);
+}
+
+/* ============================================================================
+   THEME-AWARE UTILITY CLASSES
+   ============================================================================ */
+
+/* Backgrounds */
+.tf-bg-primary { background-color: var(--tf-bg-primary); }
+.tf-bg-secondary { background-color: var(--tf-bg-secondary); }
+.tf-bg-tertiary { background-color: var(--tf-bg-tertiary); }
+.tf-bg-hover:hover { background-color: var(--tf-bg-hover); }
+
+/* Text */
+.tf-text-primary { color: var(--tf-text-primary); }
+.tf-text-secondary { color: var(--tf-text-secondary); }
+.tf-text-muted { color: var(--tf-text-muted); }
+.tf-text-buy { color: var(--tf-buy); }
+.tf-text-sell { color: var(--tf-sell); }
+.tf-text-accent { color: var(--tf-accent-primary); }
+
+/* Borders */
+.tf-border-primary { border-color: var(--tf-border-primary); }
+.tf-border-accent { border-color: var(--tf-border-accent); }
+
+/* Trading Colors */
+.tf-buy {
+  color: var(--tf-buy);
+  text-shadow: var(--tf-glow-buy);
+}
+
+.tf-sell {
+  color: var(--tf-sell);
+  text-shadow: var(--tf-glow-sell);
+}
+
+.tf-buy-bg {
+  background-color: var(--tf-buy-bg);
+}
+
+.tf-sell-bg {
+  background-color: var(--tf-sell-bg);
+}
+
+/* Glow Effects */
+.tf-glow-buy {
+  box-shadow: var(--tf-glow-buy);
+}
+
+.tf-glow-sell {
+  box-shadow: var(--tf-glow-sell);
+}
+
+.tf-glow-accent {
+  box-shadow: var(--tf-glow-accent);
+}
+
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
+@keyframes tf-pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes tf-pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes tf-flash-green {
+  0% { background-color: var(--tf-buy-bg-intense); }
+  100% { background-color: transparent; }
+}
+
+@keyframes tf-flash-red {
+  0% { background-color: var(--tf-sell-bg-intense); }
+  100% { background-color: transparent; }
+}
+
+.tf-animate-pulse-buy {
+  animation: tf-pulse-green 1s ease-in-out infinite;
+}
+
+.tf-animate-pulse-sell {
+  animation: tf-pulse-red 1s ease-in-out infinite;
+}
+
+.tf-flash-buy {
+  animation: tf-flash-green 0.3s ease-out;
+}
+
+.tf-flash-sell {
+  animation: tf-flash-red 0.3s ease-out;
+}
+
+/* ============================================================================
+   SCROLLBAR THEMING
+   ============================================================================ */
+
+.tf-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.tf-scrollbar::-webkit-scrollbar-track {
+  background: var(--tf-bg-secondary);
+}
+
+.tf-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--tf-border-secondary);
+  border-radius: 3px;
+}
+
+.tf-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--tf-text-muted);
+}
+
+/* ============================================================================
+   COMPONENT-SPECIFIC THEME OVERRIDES
+   ============================================================================ */
+
+/* Panel Headers */
+.tf-panel-header {
+  background-color: var(--tf-bg-secondary);
+  border-bottom: 1px solid var(--tf-border-primary);
+  color: var(--tf-text-muted);
+  font-family: var(--tf-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Data Tables */
+.tf-table-row {
+  border-bottom: 1px solid var(--tf-border-primary);
+  transition: background-color 0.1s ease;
+}
+
+.tf-table-row:hover {
+  background-color: var(--tf-bg-hover);
+}
+
+.tf-table-row-buy {
+  background-color: var(--tf-buy-bg);
+}
+
+.tf-table-row-sell {
+  background-color: var(--tf-sell-bg);
+}
+
+/* Buttons */
+.tf-button {
+  background-color: var(--tf-bg-tertiary);
+  border: 1px solid var(--tf-border-primary);
+  color: var(--tf-text-secondary);
+  font-family: var(--tf-font-mono);
+  transition: all 0.15s ease;
+}
+
+.tf-button:hover {
+  background-color: var(--tf-bg-hover);
+  border-color: var(--tf-border-accent);
+  color: var(--tf-accent-primary);
+}
+
+.tf-button-buy {
+  border-color: var(--tf-buy);
+  color: var(--tf-buy);
+}
+
+.tf-button-buy:hover {
+  background-color: var(--tf-buy-bg);
+  box-shadow: var(--tf-glow-buy);
+}
+
+.tf-button-sell {
+  border-color: var(--tf-sell);
+  color: var(--tf-sell);
+}
+
+.tf-button-sell:hover {
+  background-color: var(--tf-sell-bg);
+  box-shadow: var(--tf-glow-sell);
+}
+
+/* Input Fields */
+.tf-input {
+  background-color: var(--tf-bg-primary);
+  border: 1px solid var(--tf-border-primary);
+  color: var(--tf-text-primary);
+  font-family: var(--tf-font-mono);
+}
+
+.tf-input:focus {
+  border-color: var(--tf-accent-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tf-buy-bg);
+}
+
+/* Status Indicators */
+.tf-status-online {
+  color: var(--tf-buy);
+  text-shadow: var(--tf-glow-buy);
+}
+
+.tf-status-offline {
+  color: var(--tf-sell);
+  text-shadow: var(--tf-glow-sell);
+}
+
+.tf-status-warning {
+  color: var(--tf-accent-warning);
+}

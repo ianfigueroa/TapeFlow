@@ -20,8 +20,6 @@ function toTradeWithAnalytics(trade: Trade): TradeWithAnalytics {
 interface FootprintChartProps {
   trades?: TradeWithAnalytics[];  // Optional - will subscribe to buffer if not provided
   symbol: string;
-  width?: number;
-  height?: number;
   clusterIntervalMs?: number;
   tickSize?: number;
   className?: string;
@@ -30,17 +28,37 @@ interface FootprintChartProps {
 export function FootprintChart({
   trades: externalTrades,
   symbol,
-  width = 400,
-  height = 300,
   clusterIntervalMs = 60000,
   tickSize,
   className,
 }: FootprintChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CanvasEngineHandle | null>(null);
   const footprintLayerRef = useRef<FootprintLayer | null>(null);
   const lastSymbolRef = useRef<string>(symbol);
   const [isReady, setIsReady] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 400, height: 200 });
   const pendingTradesRef = useRef<Trade[]>([]);
+
+  // ResizeObserver to fill container
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setDimensions({
+            width: Math.floor(width),
+            height: Math.floor(height),
+          });
+        }
+      }
+    });
+    
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   const handleReady = useCallback((handle: CanvasEngineHandle) => {
     engineRef.current = handle;
@@ -145,11 +163,12 @@ export function FootprintChart({
   }, [externalTrades, isReady, symbol]);
 
   return (
-    <CanvasEngine
-      width={width}
-      height={height}
-      onReady={handleReady}
-      className={className}
-    />
+    <div ref={containerRef} className={`w-full h-full ${className || ''}`} style={{ minHeight: 100 }}>
+      <CanvasEngine
+        width={dimensions.width}
+        height={dimensions.height}
+        onReady={handleReady}
+      />
+    </div>
   );
 }

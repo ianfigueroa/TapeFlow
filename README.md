@@ -36,6 +36,7 @@ React Components (via useDataWorker hook)
 ### Why Web Workers Over Main Thread
 
 At 500+ trades/second, processing on the main thread causes:
+
 - JSON parsing blocking UI updates
 - GC pressure from rapid object creation
 - Frame drops below 10fps during market volatility
@@ -52,7 +53,7 @@ Solution: Move all data processing to a dedicated Web Worker.
 // - CVD (Cumulative Volume Delta) calculation
 
 // Main thread receives pre-processed data at 10Hz
-worker.postMessage({ type: 'connect', wsUrl });
+worker.postMessage({ type: "connect", wsUrl });
 worker.onmessage = (e) => {
   // Already aggregated, ready for rendering
   const { trades, candles, volumeProfile, cvd } = e.data;
@@ -89,9 +90,12 @@ const intensity = Math.min(volume / globalMaxVolume, 1);
 
 // Color gradient: dark blue -> cyan -> yellow -> white
 const getHeatmapColor = (intensity: number): string => {
-  if (intensity < 0.25) return `rgba(0, ${Math.floor(intensity * 4 * 200)}, 255, 0.8)`;
-  if (intensity < 0.5) return `rgba(0, 200, ${Math.floor(255 - (intensity - 0.25) * 4 * 200)}, 0.9)`;
-  if (intensity < 0.75) return `rgba(${Math.floor((intensity - 0.5) * 4 * 255)}, 200, 0, 0.95)`;
+  if (intensity < 0.25)
+    return `rgba(0, ${Math.floor(intensity * 4 * 200)}, 255, 0.8)`;
+  if (intensity < 0.5)
+    return `rgba(0, 200, ${Math.floor(255 - (intensity - 0.25) * 4 * 200)}, 0.9)`;
+  if (intensity < 0.75)
+    return `rgba(${Math.floor((intensity - 0.5) * 4 * 255)}, 200, 0, 0.95)`;
   return `rgba(255, ${Math.floor(200 + (intensity - 0.75) * 4 * 55)}, 0, 1.0)`;
 };
 ```
@@ -137,10 +141,10 @@ User-defined rules evaluated on each data update:
 
 ```typescript
 // IF Price > VWAP AND OBI > 0.5 THEN alert
-new CompositeCondition('AND', [
-  new PriceCondition('>', 'vwap'),
-  new OBICondition('>', 0.5),
-])
+new CompositeCondition("AND", [
+  new PriceCondition(">", "vwap"),
+  new OBICondition(">", 0.5),
+]);
 ```
 
 Conditions: Price, OBI, Volume, OPS, CVD, Composite (AND/OR)
@@ -212,12 +216,12 @@ frontend/src/
 
 ## Performance
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
+| Metric           | Target   | Achieved |
+| ---------------- | -------- | -------- |
 | Trade throughput | 500+/sec | 800+/sec |
-| Render rate | 60fps | 60fps |
-| Input latency | <16ms | <10ms |
-| Memory (heap) | <100MB | ~80MB |
+| Render rate      | 60fps    | 60fps    |
+| Input latency    | <16ms    | <10ms    |
+| Memory (heap)    | <100MB   | ~80MB    |
 
 ## Run
 

@@ -12,6 +12,7 @@ import { useState, useEffect, useRef, memo, useCallback } from 'react';
 import { cn } from '../lib/utils';
 import { VolumeProfileCalculator, type VolumeProfile as VolumeProfileResult, type VolumeNode } from '../analytics/calculators/VolumeProfileCalculator';
 import { subscribeToTrades } from '../services/dataBuffer';
+import { LabelWithTooltip } from './Tooltip';
 import type { Trade } from '../types';
 
 // Adapted type for display
@@ -160,17 +161,17 @@ export const VolumeProfile = memo(function VolumeProfile({
     }
     
     if (!calculatorRef.current) {
-      // Determine tick size based on symbol
+      // Determine tick size based on symbol - use smaller ticks for granular profile
       let tickSize = 1;
       const upperSymbol = symbol.toUpperCase();
-      if (upperSymbol.includes('BTC')) tickSize = 10;
-      else if (upperSymbol.includes('ETH')) tickSize = 1;
-      else if (upperSymbol.includes('SOL')) tickSize = 0.1;
+      if (upperSymbol.includes('BTC')) tickSize = 1;  // $1 ticks for BTC (was $10)
+      else if (upperSymbol.includes('ETH')) tickSize = 0.5;  // $0.50 ticks for ETH (was $1)
+      else if (upperSymbol.includes('SOL')) tickSize = 0.05;  // $0.05 ticks for SOL (was $0.10)
       else tickSize = 0.01;
       
       calculatorRef.current = new VolumeProfileCalculator({
         tickSize,
-        rowCount: 50,
+        rowCount: 100,  // Increased from 50 for more detail
         valueAreaPercent: 70,
       });
     }
@@ -224,11 +225,11 @@ export const VolumeProfile = memo(function VolumeProfile({
   // Get max volume for scaling
   const maxVolume = profile?.nodes.reduce((max: number, l: VolumeNode) => Math.max(max, l.totalVolume), 0) || 1;
   
-  // Convert nodes to display levels
+  // Convert nodes to display levels - show more rows for better distribution
   const displayLevels: VolumeLevel[] = (profile?.nodes || [])
     .filter((l: VolumeNode) => l.totalVolume > 0)
     .sort((a: VolumeNode, b: VolumeNode) => b.price - a.price)
-    .slice(0, 30)
+    .slice(0, 50)  // Increased from 30 for fuller profile
     .map((node: VolumeNode) => ({
       price: node.price,
       volume: node.totalVolume,
@@ -251,7 +252,7 @@ export const VolumeProfile = memo(function VolumeProfile({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs text-orange-500 uppercase">&gt;&gt; VOLUME PROFILE</span>
+          <span className="text-xs text-orange-500 uppercase">&gt;&gt; <LabelWithTooltip label="VOLUME PROFILE" term="Volume Profile" /></span>
           {profile && (
             <span className="text-[10px] text-gray-600">
               VA {valueAreaPercent}%
@@ -261,7 +262,7 @@ export const VolumeProfile = memo(function VolumeProfile({
         <div className="flex items-center gap-2">
           {profile && (
             <span className="text-xs text-yellow-400 tabular-nums">
-              POC: {formatPrice(profile.poc)}
+              <LabelWithTooltip label="POC" term="POC" />: {formatPrice(profile.poc)}
             </span>
           )}
           <span className="text-gray-600 text-xs">{isExpanded ? '[-]' : '[+]'}</span>
@@ -272,13 +273,13 @@ export const VolumeProfile = memo(function VolumeProfile({
       {isExpanded && profile && (
         <div className="flex items-center justify-between px-2 py-1 border-b border-gray-800/50 text-[10px]">
           <span className="text-[#00FF41]">
-            VAH: {formatPrice(profile.vah)}
+            <LabelWithTooltip label="VAH" term="VAH" />: {formatPrice(profile.vah)}
           </span>
           <span className="text-yellow-400">
-            POC: {formatPrice(profile.poc)}
+            <LabelWithTooltip label="POC" term="POC" />: {formatPrice(profile.poc)}
           </span>
           <span className="text-[#FF4545]">
-            VAL: {formatPrice(profile.val)}
+            <LabelWithTooltip label="VAL" term="VAL" />: {formatPrice(profile.val)}
           </span>
           <span className="text-gray-500">
             Vol: {formatVolume(profile.totalVolume)}

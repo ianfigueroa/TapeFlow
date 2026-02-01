@@ -2,62 +2,63 @@
  * ImbalanceMeter - Visual bar showing bid/ask liquidity ratio for top N levels
  * 
  * Professional quant tool showing real-time order book imbalance.
- * Forces re-render when orderBook data changes.
+ * Now subscribes directly to dataBuffer for live updates independent of parent.
  */
 
-import { useMemo, memo, useEffect, useState, useRef } from 'react';
+import { useMemo, memo, useState, useEffect, useRef } from 'react';
 import { cn } from '../lib/utils';
+import { getCurrentOrderBook } from '../services/dataBuffer';
 import type { OrderBook } from '../types';
 
 interface ImbalanceMeterProps {
-  orderBook: OrderBook | null;
+  orderBook?: OrderBook | null;  // Optional - can fetch from buffer if symbol provided
+  symbol?: string;  // If provided, will poll buffer directly for live updates
   levels?: number;
   orientation?: 'horizontal' | 'vertical';
   showLabels?: boolean;
   className?: string;
 }
 
-// Custom comparison to force re-render when orderbook content changes
-function arePropsEqual(prev: ImbalanceMeterProps, next: ImbalanceMeterProps): boolean {
-  if (prev.levels !== next.levels) return false;
-  if (prev.orientation !== next.orientation) return false;
-  if (prev.showLabels !== next.showLabels) return false;
-  if (prev.className !== next.className) return false;
-  
-  // Force re-render if orderBook reference changed or is null
-  if (!prev.orderBook || !next.orderBook) return prev.orderBook === next.orderBook;
-  
-  // Compare timestamps - if different, data changed
-  if (prev.orderBook.timestamp !== next.orderBook.timestamp) return false;
-  
-  // Compare top bid/ask prices as a quick change detection
-  const prevBidPrice = prev.orderBook.bids[0]?.price ?? 0;
-  const nextBidPrice = next.orderBook.bids[0]?.price ?? 0;
-  const prevAskPrice = prev.orderBook.asks[0]?.price ?? 0;
-  const nextAskPrice = next.orderBook.asks[0]?.price ?? 0;
-  
-  return prevBidPrice === nextBidPrice && prevAskPrice === nextAskPrice;
-}
+// Update rate for direct buffer polling
+const POLL_INTERVAL_MS = 50; // 20fps for responsive updates
 
 export const ImbalanceMeter = memo(function ImbalanceMeter({
-  orderBook,
+  orderBook: externalOrderBook,
+  symbol,
   levels = 10,
   orientation = 'vertical',
   showLabels = true,
   className,
 }: ImbalanceMeterProps) {
-  // Force update counter for animation
-  const [, setUpdateCount] = useState(0);
-  const lastTimestampRef = useRef(0);
+  // Internal state for direct buffer polling
+  const [internalOrderBook, setInternalOrderBook] = useState<OrderBook | null>(null);
+  const lastUpdateRef = useRef<number>(0);
   
-  // Force re-render when orderBook timestamp changes
+  // Poll buffer directly when symbol is provided (live updates)
   useEffect(() => {
-    if (orderBook && orderBook.timestamp !== lastTimestampRef.current) {
-      lastTimestampRef.current = orderBook.timestamp;
-      setUpdateCount(c => c + 1);
-    }
-  }, [orderBook?.timestamp]);
+    if (!symbol) return;
+    
+    const pollBuffer = () => {
+      const ob = getCurrentOrderBook(symbol);
+      if (ob && ob.timestamp !== lastUpdateRef.current) {
+        lastUpdateRef.current = ob.timestamp;
+        setInternalOrderBook(ob);
+      }
+    };
+    
+    // Initial poll
+    pollBuffer();
+    
+    // Continue polling at POLL_INTERVAL_MS
+    const intervalId = setInterval(pollBuffer, POLL_INTERVAL_MS);
+    
+    return () => clearInterval(intervalId);
+  }, [symbol]);
   
+  // Use internal buffer data if symbol provided, otherwise use external prop
+  const orderBook = symbol ? internalOrderBook : externalOrderBook;
+  
+  // Calculate imbalance data - recalculates when orderBook or levels change
   const { bidVolume, askVolume, imbalance, imbalancePercent } = useMemo(() => {
     if (!orderBook) {
       return { bidVolume: 0, askVolume: 0, imbalance: 0, imbalancePercent: 0 };
@@ -76,7 +77,7 @@ export const ImbalanceMeter = memo(function ImbalanceMeter({
       imbalance: bidVol - askVol,
       imbalancePercent: total > 0 ? ((bidVol - askVol) / total) * 100 : 0,
     };
-  }, [orderBook?.timestamp, orderBook?.bids, orderBook?.asks, levels]);
+  }, [orderBook, levels]);
 
   const formatVolume = (vol: number): string => {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;

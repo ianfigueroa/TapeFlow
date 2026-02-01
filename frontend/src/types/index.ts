@@ -47,6 +47,7 @@ export interface OrderBook {
   asks: OrderBookLevel[];
   spread: number;
   spreadPercent: number;
+  lastUpdateId?: number;
 }
 
 /**

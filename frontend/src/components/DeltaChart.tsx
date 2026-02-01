@@ -45,18 +45,28 @@ export function DeltaChart({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, width, height);
 
-    // Calculate bounds
+    // Calculate bounds with safe guards
     const deltas = data.map((d) => d.delta);
-    const maxDelta = Math.max(...deltas.map(Math.abs), 1);
+    // Ensure we have valid deltas and prevent division by zero
+    const absDeltas = deltas.map(Math.abs);
+    const maxDelta = absDeltas.length > 0 ? Math.max(...absDeltas, 1) : 1;
+    // Guard against edge case where all deltas are zero
+    const safeMaxDelta = maxDelta > 0 ? maxDelta : 1;
     
     const chartTop = 10;
     const chartBottom = height - 20;
     const chartHeight = chartBottom - chartTop;
     const zeroY = chartTop + chartHeight / 2;
 
-    // Helper functions
-    const xScale = (i: number) => (i / (data.length - 1)) * (width - 20) + 10;
-    const yScale = (delta: number) => zeroY - (delta / maxDelta) * (chartHeight / 2);
+    // Helper functions with safe guards
+    const xScale = (i: number) => {
+      const ratio = data.length > 1 ? i / (data.length - 1) : 0;
+      return ratio * (width - 20) + 10;
+    };
+    const yScale = (delta: number) => {
+      const y = zeroY - (delta / safeMaxDelta) * (chartHeight / 2);
+      return isFinite(y) ? y : zeroY;
+    };
 
     // Draw zero line
     ctx.strokeStyle = '#333333';
@@ -157,8 +167,8 @@ export function DeltaChart({
     };
 
     // Draw labels with backgrounds
-    drawTextWithBackground(`+${formatDelta(maxDelta)}`, width - 2, chartTop + 10, '#aaaaaa', '10px monospace');
-    drawTextWithBackground(`-${formatDelta(maxDelta)}`, width - 2, chartBottom - 2, '#aaaaaa', '10px monospace');
+    drawTextWithBackground(`+${formatDelta(safeMaxDelta)}`, width - 2, chartTop + 10, '#aaaaaa', '10px monospace');
+    drawTextWithBackground(`-${formatDelta(safeMaxDelta)}`, width - 2, chartBottom - 2, '#aaaaaa', '10px monospace');
     drawTextWithBackground('0', width - 2, zeroY + 3, '#aaaaaa', '10px monospace');
 
     // Current delta label with background

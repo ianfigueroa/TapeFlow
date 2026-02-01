@@ -32,11 +32,13 @@ TapeFlow is a real-time cryptocurrency market data visualization platform design
 ### Layers
 
 **Backend (Node.js):**
+
 - Connects to Binance Spot and Futures WebSocket APIs
 - Normalizes and forwards trades, order book, and liquidation events
 - Can switch to a C++ simulation engine for synthetic data
 
 **Frontend (React + Vite):**
+
 - Receives data via WebSocket
 - Buffers all data in plain JavaScript arrays (not React state)
 - Renders charts and tables at 60fps using canvas for performance
@@ -183,53 +185,53 @@ Binance @depth20@100ms
 
 ### Components (frontend/src/components/)
 
-| Component | Purpose | Rendering | Key Features |
-|-----------|---------|-----------|--------------|
-| `DashboardLayout.tsx` | Main layout: header, tabs, split panels | React DOM | |
-| `TapeTable.tsx` | Real-time trade stream ("tape") | React DOM | Virtualized with @tanstack/react-virtual |
-| `OrderBook.tsx` | Current order book (bids/asks, spread, imbalance) | React DOM | |
-| `OrderBookHeatmap.tsx` | Order book depth over time (circular buffer) | Canvas | |
-| `FootprintChart.tsx` | Volume clusters by price level | Canvas | Heatmap coloring by volume intensity |
-| `CandlestickChart.tsx` | OHLC candlesticks with wicks | Canvas | ResizeObserver for dynamic sizing |
-| `OIMonitor.tsx` | Open Interest tracking | React + Canvas | Sparkline, 5-min delta, trend history |
-| `SessionStats.tsx` | Session analytics panel | React DOM | VWAP, session high/low/open, total volume/delta |
-| `LiquidationHeatmap.tsx` | Estimated liquidation zones | Canvas | 15-second periodic recalculation |
-| `ImbalanceMeter.tsx` | Bid/ask liquidity imbalance | React DOM | Force update on orderbook changes |
-| `AlgoSignals.tsx` | Spoof/wall/velocity detection | React DOM | |
-| `ChartPanel.tsx` | Container for charts, manages layout | React DOM | |
-| `SymbolHeader.tsx` | Current symbol, price, and stats | React DOM | |
-| `SymbolSelector.tsx` | Modal for adding/selecting symbols | React DOM | |
-| `SymbolTab.tsx` | Tab component for switching symbols | React DOM | |
-| `SettingsPanel.tsx` | User settings: colors, chart toggles | React DOM | |
-| `ModeToggle.tsx` | Switches between live and simulation mode | React DOM | |
-| `RealTimeClock.tsx` | Current time and connection status | React DOM | |
+| Component                | Purpose                                           | Rendering      | Key Features                                    |
+| ------------------------ | ------------------------------------------------- | -------------- | ----------------------------------------------- |
+| `DashboardLayout.tsx`    | Main layout: header, tabs, split panels           | React DOM      |                                                 |
+| `TapeTable.tsx`          | Real-time trade stream ("tape")                   | React DOM      | Virtualized with @tanstack/react-virtual        |
+| `OrderBook.tsx`          | Current order book (bids/asks, spread, imbalance) | React DOM      |                                                 |
+| `OrderBookHeatmap.tsx`   | Order book depth over time (circular buffer)      | Canvas         |                                                 |
+| `FootprintChart.tsx`     | Volume clusters by price level                    | Canvas         | Heatmap coloring by volume intensity            |
+| `CandlestickChart.tsx`   | OHLC candlesticks with wicks                      | Canvas         | ResizeObserver for dynamic sizing               |
+| `OIMonitor.tsx`          | Open Interest tracking                            | React + Canvas | Sparkline, 5-min delta, trend history           |
+| `SessionStats.tsx`       | Session analytics panel                           | React DOM      | VWAP, session high/low/open, total volume/delta |
+| `LiquidationHeatmap.tsx` | Estimated liquidation zones                       | Canvas         | 15-second periodic recalculation                |
+| `ImbalanceMeter.tsx`     | Bid/ask liquidity imbalance                       | React DOM      | Force update on orderbook changes               |
+| `AlgoSignals.tsx`        | Spoof/wall/velocity detection                     | React DOM      |                                                 |
+| `ChartPanel.tsx`         | Container for charts, manages layout              | React DOM      |                                                 |
+| `SymbolHeader.tsx`       | Current symbol, price, and stats                  | React DOM      |                                                 |
+| `SymbolSelector.tsx`     | Modal for adding/selecting symbols                | React DOM      |                                                 |
+| `SymbolTab.tsx`          | Tab component for switching symbols               | React DOM      |                                                 |
+| `SettingsPanel.tsx`      | User settings: colors, chart toggles              | React DOM      |                                                 |
+| `ModeToggle.tsx`         | Switches between live and simulation mode         | React DOM      |                                                 |
+| `RealTimeClock.tsx`      | Current time and connection status                | React DOM      |                                                 |
 
 ### Hooks (frontend/src/hooks/)
 
-| Hook | Purpose |
-|------|---------|
+| Hook               | Purpose                                                              |
+| ------------------ | -------------------------------------------------------------------- |
 | `useDataWorker.ts` | Manages Web Worker communication, connection state, message handling |
-| `useWebSocket.ts` | Legacy WebSocket hook (being replaced by Web Worker) |
+| `useWebSocket.ts`  | Legacy WebSocket hook (being replaced by Web Worker)                 |
 
 ### Workers (frontend/src/services/)
 
-| Worker | Purpose |
-|--------|---------|
+| Worker           | Purpose                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
 | `data.worker.ts` | Offloads all data processing: JSON parsing, trade aggregation, OHLC calculation, CVD, volume profile |
 
 ### Services (frontend/src/services/)
 
-| Service | Purpose |
-|---------|---------|
-| `dataBuffer.ts` | Buffers trades, order book, ticker. Implements sliding window for OPS |
-| `globalClock.ts` | Single requestAnimationFrame loop for time sync |
+| Service          | Purpose                                                               |
+| ---------------- | --------------------------------------------------------------------- |
+| `dataBuffer.ts`  | Buffers trades, order book, ticker. Implements sliding window for OPS |
+| `globalClock.ts` | Single requestAnimationFrame loop for time sync                       |
 
 ### Stores (frontend/src/stores/)
 
-| Store | Purpose |
-|-------|---------|
-| `useMarketStore.ts` | Market data state (trades, order book, ticker) |
-| `useSettingsStore.ts` | User preferences (colors, chart toggles) |
+| Store                 | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `useMarketStore.ts`   | Market data state (trades, order book, ticker) |
+| `useSettingsStore.ts` | User preferences (colors, chart toggles)       |
 
 ---
 
@@ -242,25 +244,25 @@ type Trade = {
   id: string;
   price: number;
   volume: number;
-  side: 'buy' | 'sell';    // Aggressor side
+  side: "buy" | "sell"; // Aggressor side
   timestamp: number;
   isLiquidation?: boolean;
-  liquidationSide?: 'long' | 'short';
+  liquidationSide?: "long" | "short";
 };
 ```
 
 **Example:**
 
-| id | price | volume | side | timestamp | isLiquidation | liquidationSide |
-|----|-------|--------|------|-----------|---------------|-----------------|
-| 123456789 | 42000.5 | 0.25 | buy | 1700000000 | false | - |
-| 123456790 | 41990.0 | 1.5 | sell | 1700000001 | true | long |
+| id        | price   | volume | side | timestamp  | isLiquidation | liquidationSide |
+| --------- | ------- | ------ | ---- | ---------- | ------------- | --------------- |
+| 123456789 | 42000.5 | 0.25   | buy  | 1700000000 | false         | -               |
+| 123456790 | 41990.0 | 1.5    | sell | 1700000001 | true          | long            |
 
 ### OrderBook Model
 
 ```typescript
 type OrderBook = {
-  bids: [number, number][];  // [price, size]
+  bids: [number, number][]; // [price, size]
   asks: [number, number][];
   timestamp: number;
 };
@@ -269,9 +271,9 @@ type OrderBook = {
 **Example:**
 
 | Bids (Price, Size) | Asks (Price, Size) |
-|--------------------|-------------------|
-| 41990, 2.0 | 42010, 1.5 |
-| 41980, 1.0 | 42020, 0.5 |
+| ------------------ | ------------------ |
+| 41990, 2.0         | 42010, 1.5         |
+| 41980, 1.0         | 42020, 0.5         |
 
 ### Liquidation Model
 
@@ -280,7 +282,7 @@ type Liquidation = {
   id: string;
   price: number;
   volume: number;
-  side: 'long' | 'short';
+  side: "long" | "short";
   timestamp: number;
 };
 ```
@@ -298,10 +300,10 @@ VWAP = Σ(Price × Volume) / Σ(Volume)
 **Example:**
 
 | Price | Volume |
-|-------|--------|
-| 100 | 10 |
-| 101 | 5 |
-| 99 | 15 |
+| ----- | ------ |
+| 100   | 10     |
+| 101   | 5      |
+| 99    | 15     |
 
 ```
 VWAP = (100×10 + 101×5 + 99×15) / (10+5+15)
@@ -321,11 +323,11 @@ CVD = Σ(Buy Volume - Sell Volume) over time
 **Example:**
 
 | Trade | Side | Volume | Running CVD |
-|-------|------|--------|-------------|
-| 1 | buy | 0.5 | +0.5 |
-| 2 | sell | 0.3 | +0.2 |
-| 3 | buy | 0.8 | +1.0 |
-| 4 | sell | 1.2 | -0.2 |
+| ----- | ---- | ------ | ----------- |
+| 1     | buy  | 0.5    | +0.5        |
+| 2     | sell | 0.3    | +0.2        |
+| 3     | buy  | 0.8    | +1.0        |
+| 4     | sell | 1.2    | -0.2        |
 
 ### OPS (Orders Per Second)
 
@@ -339,11 +341,11 @@ OPS = count of trades where (now - timestamp) < 1000ms
 
 **Typical values:**
 
-| Market State | OPS |
-|--------------|-----|
-| Quiet | 10-50 |
-| Active | 100-200 |
-| Volatile | 300-500+ |
+| Market State | OPS      |
+| ------------ | -------- |
+| Quiet        | 10-50    |
+| Active       | 100-200  |
+| Volatile     | 300-500+ |
 
 ### Imbalance (IMB)
 
@@ -368,13 +370,16 @@ Range: -1.0 (all asks) to +1.0 (all bids)
 ## Trading Terms Glossary
 
 ### Aggressor / Taker
+
 The trader who initiates a trade by crossing the spread (e.g., a market buy that hits the best ask).
 
 ### Bid / Ask
+
 - **Bid:** The highest price a buyer is willing to pay
 - **Ask:** The lowest price a seller is willing to accept
 
 ### Spread
+
 The difference between the best ask and best bid.
 
 ```
@@ -384,6 +389,7 @@ Spread: 0.02
 ```
 
 ### Mid Price
+
 The average of the best bid and best ask.
 
 ```
@@ -391,15 +397,19 @@ Mid = (Best Bid + Best Ask) / 2
 ```
 
 ### Liquidation
+
 When a leveraged position is force-closed by the exchange because the trader's margin is insufficient.
 
 ### Spoof
+
 A large order placed to create a false impression of market interest, then quickly cancelled. TapeFlow detects orders that vanish within 2 seconds.
 
 ### Wall
+
 A large resting order that acts as support or resistance in the order book.
 
 ### Heatmap
+
 In TapeFlow, the heatmap shows liquidity at each price level over time:
 
 ```
@@ -512,13 +522,13 @@ TapeFlow/
 
 ## Performance Characteristics
 
-| Metric | Before Optimization | After Web Worker |
-|--------|---------------------|------------------|
-| Max Throughput | ~50 trades/sec | 1000+ trades/sec |
-| Frame Rate | 5-10 fps | 60 fps stable |
-| Latency | 500ms+ | <16ms |
-| Memory (1hr) | Growing unbounded | Stable ~100MB |
-| Main Thread CPU | 80-100% | <30% |
+| Metric          | Before Optimization | After Web Worker |
+| --------------- | ------------------- | ---------------- |
+| Max Throughput  | ~50 trades/sec      | 1000+ trades/sec |
+| Frame Rate      | 5-10 fps            | 60 fps stable    |
+| Latency         | 500ms+              | <16ms            |
+| Memory (1hr)    | Growing unbounded   | Stable ~100MB    |
+| Main Thread CPU | 80-100%             | <30%             |
 
 ### Key Optimizations
 
@@ -562,16 +572,19 @@ struct SimStats {
 ### Activation
 
 1. Build engine:
+
    ```bash
    cd cpp-engine/build
    cmake --build . --config Release
    ```
 
 2. Run engine:
+
    ```bash
    ./Release/hyperion.exe   # Windows
    ./hyperion               # Linux/Mac
    ```
+
    Starts WebSocket server on port 9001.
 
 3. In TapeFlow UI, click "SIM" in the header to switch to simulation mode.
@@ -623,7 +636,7 @@ Main Thread                           Web Worker
 const { isConnected, latestData, connect, disconnect } = useDataWorker();
 
 // Connect to data source
-connect('ws://localhost:3001');
+connect("ws://localhost:3001");
 
 // Receive pre-processed data at 10Hz
 useEffect(() => {
@@ -637,4 +650,4 @@ useEffect(() => {
 
 ---
 
-*This documentation is for TapeFlow v2.1. Last updated: January 2025.*
+_This documentation is for TapeFlow v2.1. Last updated: January 2025._

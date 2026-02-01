@@ -158,7 +158,8 @@ export const AnalysisDashboard = memo(function AnalysisDashboard({
   }, []);
   
   const formatPercent = useCallback((pct: number) => {
-    return (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
+    // Use 2 decimal places for better precision, even for small changes
+    return (pct > 0 ? '+' : '') + pct.toFixed(2) + '%';
   }, []);
   
   const formatDuration = useCallback((startTime: number) => {

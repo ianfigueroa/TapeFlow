@@ -130,7 +130,6 @@ export function CandlestickChart({
     const availableWidth = width - 60; // Margins for price labels
     const candleSpacing = Math.max(1, Math.floor(availableWidth / validData.length));
     const candleWidth = Math.max(3, Math.min(candleSpacing * 0.75, 20));
-    const candleGap = candleSpacing - candleWidth;
 
     // Scale functions
     const xScale = (i: number) => 30 + i * candleSpacing + candleWidth / 2;
@@ -317,12 +316,12 @@ export function CandlestickChart({
   return (
     <div 
       ref={containerRef} 
-      className={`bg-black rounded w-full h-full ${className}`}
-      style={{ minHeight: propHeight || 200 }}
+      className={`bg-black rounded ${className}`}
+      style={{ width: '100%', height: '100%', minHeight: 100 }}
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full"
+        style={{ display: 'block', width: '100%', height: '100%' }}
       />
     </div>
   );

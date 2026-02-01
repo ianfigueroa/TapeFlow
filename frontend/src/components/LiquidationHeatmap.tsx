@@ -6,7 +6,8 @@
  * are likely clustered.
  * 
  * Features:
- * - Periodic recalculation every 15 seconds for performance
+ * - Polls for data every 10 seconds (as specified)
+ * - Falls back to estimation if no API data available
  * - Visual intensity based on estimated liquidity
  * - Separate zones for long and short liquidations
  * 
@@ -29,14 +30,20 @@ interface LiquidationHeatmapProps {
   symbol: string;
   currentPrice: number;
   className?: string;
-  refreshIntervalMs?: number; // How often to recalculate (default 15s)
+  refreshIntervalMs?: number; // How often to poll (default 10s per spec)
 }
 
 // Common leverage levels used in crypto trading
 const LEVERAGE_LEVELS = [5, 10, 25, 50, 100];
 
-// Recalculation interval (15 seconds by default)
-const DEFAULT_REFRESH_INTERVAL_MS = 15000;
+// Polling interval (10 seconds as specified in requirements)
+const DEFAULT_REFRESH_INTERVAL_MS = 10000;
+
+// Binance Futures API for Open Interest (proxy for liquidation potential)
+const FUTURES_API_BASE = 'https://fapi.binance.com/fapi/v1';
+
+// Hydration state
+type HydrationState = 'loading' | 'polling' | 'estimated' | 'error';
 
 // Estimate liquidation price for a position
 function calculateLiquidationPrice(
@@ -56,6 +63,41 @@ function calculateLiquidationPrice(
   }
 }
 
+/**
+ * Fetch open interest data from Binance as proxy for liquidation estimation
+ */
+async function fetchOpenInterestData(symbol: string): Promise<{ longShortRatio: number; openInterest: number } | null> {
+  try {
+    const normalizedSymbol = symbol.toUpperCase().replace('/', '').replace('-', '');
+    
+    // Fetch long/short ratio for better liquidation estimation
+    const [ratioRes, oiRes] = await Promise.all([
+      fetch(`${FUTURES_API_BASE}/globalLongShortAccountRatio?symbol=${normalizedSymbol}&period=5m&limit=1`),
+      fetch(`${FUTURES_API_BASE}/openInterest?symbol=${normalizedSymbol}`)
+    ]);
+    
+    let longShortRatio = 1;
+    let openInterest = 0;
+    
+    if (ratioRes.ok) {
+      const ratioData = await ratioRes.json();
+      if (ratioData.length > 0) {
+        longShortRatio = parseFloat(ratioData[0].longShortRatio);
+      }
+    }
+    
+    if (oiRes.ok) {
+      const oiData = await oiRes.json();
+      openInterest = parseFloat(oiData.openInterest);
+    }
+    
+    return { longShortRatio, openInterest };
+  } catch (error) {
+    console.warn('[LiquidationHeatmap] Failed to fetch OI data:', error);
+    return null;
+  }
+}
+
 export const LiquidationHeatmap = memo(function LiquidationHeatmap({
   symbol,
   currentPrice,
@@ -64,39 +106,58 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
 }: LiquidationHeatmapProps) {
   const [levels, setLevels] = useState<LiquidationLevel[]>([]);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
-  const lastPriceRef = useRef<number>(0);
+  const [hydrationState, setHydrationState] = useState<HydrationState>('loading');
   const lastSymbolRef = useRef<string>('');
+  const oiDataRef = useRef<{ longShortRatio: number; openInterest: number } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Store currentPrice in ref to avoid restarting poll timer on every price change
+  const currentPriceRef = useRef<number>(currentPrice);
+  
+  // Keep price ref updated without restarting the poll effect
+  useEffect(() => {
+    currentPriceRef.current = currentPrice;
+  }, [currentPrice]);
 
-  // Memoized calculation function
-  const calculateLevels = useCallback((price: number): LiquidationLevel[] => {
+  // Memoized calculation function - enhanced with OI data
+  const calculateLevels = useCallback((price: number, oiData?: { longShortRatio: number; openInterest: number } | null): LiquidationLevel[] => {
     if (!price || price <= 0) return [];
 
     const newLevels: LiquidationLevel[] = [];
+    
+    // Use OI data to weight liquidation estimates
+    const ratio = oiData?.longShortRatio || 1;
+    const oi = oiData?.openInterest || 0;
+    
+    // More longs = more long liquidation potential below price
+    const longWeight = ratio > 1 ? ratio : 1;
+    const shortWeight = ratio < 1 ? 1 / ratio : 1;
 
     // For each leverage level, calculate potential liquidation zones
     LEVERAGE_LEVELS.forEach(leverage => {
       // Estimate liquidity based on common entry points near current price
       // Higher leverage = closer liquidation = more liquidity typically
+      const baseLiquidity = oi > 0 ? (oi * price * 0.1) / LEVERAGE_LEVELS.length : 10000000;
       const liquidityMultiplier = leverage / 10;
       
       // Use deterministic random based on price level for consistency
       const priceHash = Math.sin(price * leverage * 12345.6789);
       const randomFactor = 0.5 + (priceHash * priceHash) * 0.5;
       
-      // Long liquidations (below price)
+      // Long liquidations (below price) - weighted by long ratio
       const longLiqPrice = calculateLiquidationPrice(price, leverage, 'long');
       newLevels.push({
         price: longLiqPrice,
-        estimatedLiquidity: 10000000 * liquidityMultiplier * randomFactor,
+        estimatedLiquidity: baseLiquidity * liquidityMultiplier * randomFactor * longWeight,
         leverage,
         side: 'long',
       });
 
-      // Short liquidations (above price)
+      // Short liquidations (above price) - weighted by short ratio
       const shortLiqPrice = calculateLiquidationPrice(price, leverage, 'short');
       newLevels.push({
         price: shortLiqPrice,
-        estimatedLiquidity: 10000000 * liquidityMultiplier * randomFactor,
+        estimatedLiquidity: baseLiquidity * liquidityMultiplier * randomFactor * shortWeight,
         leverage,
         side: 'short',
       });
@@ -107,40 +168,75 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
     return newLevels;
   }, []);
 
-  // Initial calculation and symbol change
+  // Poll for data on interval (10 seconds as specified)
+  // NOTE: currentPrice is read from ref inside poll() to avoid restarting timer
   useEffect(() => {
+    if (!symbol) {
+      setHydrationState('loading');
+      return;
+    }
+    
+    // Reset on symbol change only
     if (symbol !== lastSymbolRef.current) {
       lastSymbolRef.current = symbol;
-      lastPriceRef.current = currentPrice;
-      setLevels(calculateLevels(currentPrice));
-      setLastUpdate(Date.now());
+      setLevels([]);
+      setHydrationState('loading');
+      oiDataRef.current = null;
     }
-  }, [symbol, currentPrice, calculateLevels]);
-
-  // Periodic recalculation with setInterval
-  useEffect(() => {
-    if (!currentPrice || currentPrice <= 0) return;
-
-    // Initial calculation
-    if (levels.length === 0) {
-      setLevels(calculateLevels(currentPrice));
-      setLastUpdate(Date.now());
-      lastPriceRef.current = currentPrice;
-    }
-
-    // Periodic recalculation
-    const intervalId = setInterval(() => {
-      // Only recalculate if price has moved significantly (>0.1%)
-      const priceChange = Math.abs(currentPrice - lastPriceRef.current) / lastPriceRef.current;
-      if (priceChange > 0.001 || levels.length === 0) {
-        setLevels(calculateLevels(currentPrice));
-        setLastUpdate(Date.now());
-        lastPriceRef.current = currentPrice;
+    
+    let mounted = true;
+    
+    // Polling function - reads currentPrice from ref
+    const poll = async () => {
+      if (!mounted) return;
+      
+      // Read latest price from ref (doesn't restart effect)
+      const priceToUse = currentPriceRef.current;
+      if (!priceToUse || priceToUse <= 0) return;
+      
+      // Abort previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    }, refreshIntervalMs);
-
-    return () => clearInterval(intervalId);
-  }, [currentPrice, refreshIntervalMs, calculateLevels, levels.length]);
+      abortControllerRef.current = new AbortController();
+      
+      try {
+        // Fetch OI data for enhanced estimation
+        const oiData = await fetchOpenInterestData(symbol);
+        if (!mounted) return;
+        
+        oiDataRef.current = oiData;
+        
+        // Calculate levels with fresh data using current price from ref
+        const newLevels = calculateLevels(currentPriceRef.current, oiData);
+        setLevels(newLevels);
+        setLastUpdate(Date.now());
+        
+        setHydrationState(oiData ? 'polling' : 'estimated');
+      } catch (error) {
+        if (!mounted) return;
+        // Fall back to estimation
+        const newLevels = calculateLevels(currentPriceRef.current, null);
+        setLevels(newLevels);
+        setLastUpdate(Date.now());
+        setHydrationState('estimated');
+      }
+    };
+    
+    // Initial poll immediately
+    poll();
+    
+    // Then poll every 10 seconds (as specified) - timer won't restart on price changes
+    const intervalId = setInterval(poll, refreshIntervalMs);
+    
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [symbol, refreshIntervalMs, calculateLevels]); // Removed currentPrice from deps
 
   // Group levels into zones
   const { abovePrice, belowPrice, maxLiquidity } = useMemo(() => {
@@ -175,8 +271,24 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
 
   if (!currentPrice) {
     return (
-      <div className={cn("flex items-center justify-center p-4 text-gray-600 text-xs", className)}>
-        Waiting for price data...
+      <div className={cn("flex items-center justify-center p-4 text-gray-600 text-xs bg-black border border-gray-800 rounded", className)}>
+        <div className="text-center font-mono">
+          <div className="text-lg mb-1 animate-pulse">◐</div>
+          <span className="text-[#00FF41]">&gt; Loading price data...</span>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show loading state while fetching initial data
+  if (hydrationState === 'loading' && levels.length === 0) {
+    return (
+      <div className={cn("flex items-center justify-center p-4 text-gray-600 text-xs bg-black border border-gray-800 rounded", className)}>
+        <div className="text-center font-mono">
+          <div className="text-lg mb-1 animate-spin">◐</div>
+          <span className="text-purple-400">&gt; Fetching liquidation data...</span>
+          {symbol && <p className="text-[10px] text-gray-700 mt-1">{symbol.toUpperCase()}</p>}
+        </div>
       </div>
     );
   }
@@ -185,9 +297,17 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
     <div className={cn("bg-black border border-gray-800 rounded overflow-hidden flex flex-col", className)}>
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-800 bg-gray-900/30 flex-shrink-0">
-        <span className="text-xs font-mono font-semibold text-purple-500 tracking-wider">
-          LIQUIDATION ZONES
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-semibold text-purple-500 tracking-wider">
+            LIQUIDATION ZONES
+          </span>
+          <span className={cn(
+            "text-[8px] px-1 rounded font-mono",
+            hydrationState === 'polling' ? "bg-purple-500/20 text-purple-400" : "bg-gray-800 text-gray-500"
+          )}>
+            {hydrationState === 'polling' ? 'LIVE' : 'EST'}
+          </span>
+        </div>
         <span className="text-[10px] text-gray-600 font-mono">
           {lastUpdate > 0 ? formatTimeSince(lastUpdate) : 'calculating...'}
         </span>
@@ -196,25 +316,23 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
       {/* Heatmap */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {/* Above price (short liquidations - will squeeze shorts) */}
-        <div className="flex-1 flex flex-col justify-end overflow-hidden">
+        <div className="flex-1 flex flex-col justify-end overflow-hidden px-1">
           {abovePrice.slice(0, 5).reverse().map((level, i) => {
             const intensity = getIntensity(level.estimatedLiquidity);
+            const barWidthPercent = Math.max(5, Math.min(95, intensity * 95)); // 5-95% range
             return (
               <div
                 key={`above-${i}`}
-                className="flex items-center px-2 py-0.5 text-[10px] font-mono relative"
-                style={{
-                  background: `linear-gradient(to right, rgba(249, 115, 22, ${intensity * 0.3}) 0%, transparent 100%)`,
-                }}
+                className="flex items-center py-0.5 text-[10px] font-mono relative"
               >
-                <span className="w-12 text-orange-500 tabular-nums">{level.leverage}x</span>
-                <span className="flex-1 text-gray-400 tabular-nums">{formatPrice(level.price)}</span>
-                <span className="text-orange-400 tabular-nums">{formatLiquidity(level.estimatedLiquidity)}</span>
-                {/* Intensity bar */}
+                {/* Intensity bar - percentage-based width */}
                 <div 
-                  className="absolute left-0 top-0 bottom-0 bg-orange-500/20"
-                  style={{ width: `${intensity * 100}%` }}
+                  className="absolute left-0 top-0 bottom-0 bg-orange-500/20 rounded-r"
+                  style={{ width: `${barWidthPercent}%` }}
                 />
+                <span className="w-10 text-orange-500 tabular-nums relative z-10 pl-1">{level.leverage}x</span>
+                <span className="flex-1 text-gray-400 tabular-nums relative z-10">{formatPrice(level.price)}</span>
+                <span className="text-orange-400 tabular-nums relative z-10 pr-1">{formatLiquidity(level.estimatedLiquidity)}</span>
               </div>
             );
           })}
@@ -232,25 +350,23 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
         </div>
 
         {/* Below price (long liquidations - will squeeze longs) */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden px-1">
           {belowPrice.slice(0, 5).map((level, i) => {
             const intensity = getIntensity(level.estimatedLiquidity);
+            const barWidthPercent = Math.max(5, Math.min(95, intensity * 95)); // 5-95% range
             return (
               <div
                 key={`below-${i}`}
-                className="flex items-center px-2 py-0.5 text-[10px] font-mono relative"
-                style={{
-                  background: `linear-gradient(to right, rgba(168, 85, 247, ${intensity * 0.3}) 0%, transparent 100%)`,
-                }}
+                className="flex items-center py-0.5 text-[10px] font-mono relative"
               >
-                <span className="w-12 text-purple-500 tabular-nums">{level.leverage}x</span>
-                <span className="flex-1 text-gray-400 tabular-nums">{formatPrice(level.price)}</span>
-                <span className="text-purple-400 tabular-nums">{formatLiquidity(level.estimatedLiquidity)}</span>
-                {/* Intensity bar */}
+                {/* Intensity bar - percentage-based width */}
                 <div 
-                  className="absolute left-0 top-0 bottom-0 bg-purple-500/20"
-                  style={{ width: `${intensity * 100}%` }}
+                  className="absolute left-0 top-0 bottom-0 bg-purple-500/20 rounded-r"
+                  style={{ width: `${barWidthPercent}%` }}
                 />
+                <span className="w-10 text-purple-500 tabular-nums relative z-10 pl-1">{level.leverage}x</span>
+                <span className="flex-1 text-gray-400 tabular-nums relative z-10">{formatPrice(level.price)}</span>
+                <span className="text-purple-400 tabular-nums relative z-10 pr-1">{formatLiquidity(level.estimatedLiquidity)}</span>
               </div>
             );
           })}

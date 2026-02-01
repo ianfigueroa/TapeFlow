@@ -1,7 +1,12 @@
 import { DashboardLayout } from './components/DashboardLayout';
+import { ThemeProvider } from './hooks/useTheme';
 
 function App() {
-  return <DashboardLayout />;
+  return (
+    <ThemeProvider>
+      <DashboardLayout />
+    </ThemeProvider>
+  );
 }
 
 export default App;
