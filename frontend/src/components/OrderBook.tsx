@@ -220,11 +220,6 @@ function getTickSizeOptions(symbol: string, price: number): number[] {
   return TICK_SIZES.LOW;
 }
 
-function getDefaultTickSize(symbol: string, price: number): number {
-  const options = getTickSizeOptions(symbol, price);
-  return options[Math.floor(options.length / 2)] || options[0];
-}
-
 // Aggregate order book levels by tick size
 function aggregateLevelsByTick(
   levels: OrderBookLevel[],

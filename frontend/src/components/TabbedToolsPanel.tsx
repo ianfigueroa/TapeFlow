@@ -7,7 +7,6 @@
 
 import { useState, memo } from 'react';
 import { cn } from '../lib/utils';
-import { AnalysisDashboard } from './dashboard/AnalysisDashboard';
 import { NewsFeed } from './NewsFeed';
 import { AlgoSignals } from './AlgoSignals';
 
@@ -72,8 +71,11 @@ export const TabbedToolsPanel = memo(function TabbedToolsPanel({
       {/* Tab Content - Full height for readability */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'analytics' && (
-          <div className="h-full overflow-auto p-2">
-            <AnalysisDashboard symbol={symbol} compact={false} />
+          <div className="h-full overflow-auto p-2 flex items-center justify-center text-gray-600 font-mono">
+            <div className="text-center">
+              <div className="text-2xl mb-2">📊</div>
+              <div>Analytics panel coming soon</div>
+            </div>
           </div>
         )}
         
