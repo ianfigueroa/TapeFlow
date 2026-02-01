@@ -248,18 +248,18 @@ export const DOMLadder = memo(function DOMLadder({
     if (!orderBook || currentPrice === 0) return [];
     
     // Determine tick size - use manual setting if set, otherwise auto-detect
-    // Use smaller ticks to ensure order book levels fall into our buckets
+    // IMPORTANT: tick size must match display precision to avoid duplicate-looking rows
     let actualTickSize = tickSize;
     if (actualTickSize === null) {
-      // Auto-detect based on symbol - use smallest practical tick size
+      // Auto-detect based on symbol - match display precision from formatPrice()
       const upperSymbol = symbol.toUpperCase();
-      if (upperSymbol.includes('BTC')) actualTickSize = 0.1;  // Reduced from 1
-      else if (upperSymbol.includes('ETH')) actualTickSize = 0.01;  // Reduced from 0.1
-      else if (upperSymbol.includes('SOL')) actualTickSize = 0.001;  // Reduced from 0.01
-      else if (currentPrice >= 10000) actualTickSize = 0.1;
-      else if (currentPrice >= 1000) actualTickSize = 0.01;
-      else if (currentPrice >= 100) actualTickSize = 0.001;
-      else actualTickSize = 0.0001;
+      if (upperSymbol.includes('BTC')) actualTickSize = 1;       // BTC: display as xxx.0, tick 1
+      else if (upperSymbol.includes('ETH')) actualTickSize = 0.1;  // ETH: display as xxxx.x, tick 0.1
+      else if (upperSymbol.includes('SOL')) actualTickSize = 0.01; // SOL: display as xx.xx, tick 0.01
+      else if (currentPrice >= 10000) actualTickSize = 1;
+      else if (currentPrice >= 1000) actualTickSize = 0.1;  // Match formatPrice .toFixed(1)
+      else if (currentPrice >= 100) actualTickSize = 0.01;  // Match formatPrice .toFixed(2)
+      else actualTickSize = 0.01;
     }
     
     // Create price ladder centered on current price
