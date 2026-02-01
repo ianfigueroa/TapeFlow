@@ -7,14 +7,18 @@ export type { Layout, LayoutItem };
 export type Layouts = ResponsiveLayouts;
 
 /**
- * Panel identifiers matching the 5 main dashboard components
+ * Panel identifiers matching dashboard components
  */
 export type PanelId =
   | 'tape-table'
   | 'algo-signals'
   | 'tabbed-chart'
   | 'order-book'
-  | 'analysis-dashboard';
+  | 'analysis-dashboard'
+  | 'sentiment-panel'
+  | 'news-feed'
+  | 'volume-profile'
+  | 'dom-ladder';
 
 /**
  * Saved layout preset configuration
