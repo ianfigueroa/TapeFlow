@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <chrono>
 #include <thread>
+#include <cstring>
+#include <cstdlib>
 
 namespace hyperion
 {
@@ -25,6 +27,10 @@ namespace hyperion
         {
             book_ = &book;
             simulator_ = &simulator;
+
+            // Set up message handler for configuration commands
+            wsServer_.setMessageHandler([this](const std::string &msg)
+                                        { handleIncomingMessage(msg); });
 
             if (!wsServer_.start())
             {
@@ -60,6 +66,104 @@ namespace hyperion
         std::atomic<bool> running_;
         std::thread broadcastThread_;
         uint32_t broadcastIntervalMs_;
+
+        // Simple JSON value extraction (minimal implementation, no external deps)
+        double extractDouble(const std::string &json, const std::string &key)
+        {
+            std::string searchKey = "\"" + key + "\":";
+            size_t pos = json.find(searchKey);
+            if (pos == std::string::npos)
+                return -1.0;
+            pos += searchKey.length();
+            // Skip whitespace
+            while (pos < json.length() && (json[pos] == ' ' || json[pos] == '\t'))
+                pos++;
+            size_t end = pos;
+            while (end < json.length() && (isdigit(json[end]) || json[end] == '.' || json[end] == '-'))
+                end++;
+            if (end > pos)
+            {
+                return std::stod(json.substr(pos, end - pos));
+            }
+            return -1.0;
+        }
+
+        std::string extractString(const std::string &json, const std::string &key)
+        {
+            std::string searchKey = "\"" + key + "\":\"";
+            size_t pos = json.find(searchKey);
+            if (pos == std::string::npos)
+                return "";
+            pos += searchKey.length();
+            size_t end = json.find("\"", pos);
+            if (end == std::string::npos)
+                return "";
+            return json.substr(pos, end - pos);
+        }
+
+        void handleIncomingMessage(const std::string &message)
+        {
+            if (!simulator_ || message.empty())
+                return;
+
+            // Check message type
+            std::string type = extractString(message, "type");
+
+            if (type == "configure")
+            {
+                // Handle configuration updates
+                std::string param = extractString(message, "param");
+                double value = extractDouble(message, "value");
+
+                if (param == "targetOPS" && value > 0)
+                {
+                    simulator_->setTargetOPS(static_cast<uint64_t>(value));
+                }
+                else if (param == "basePrice" && value > 0)
+                {
+                    simulator_->setBasePrice(value);
+                }
+                else if (param == "volatility" && value > 0)
+                {
+                    simulator_->setVolatilityMultiplier(value);
+                }
+                else if (param == "momentum" && value >= 0)
+                {
+                    simulator_->setMomentumStrength(value);
+                }
+                else if (param == "broadcastInterval" && value >= 10)
+                {
+                    broadcastIntervalMs_ = static_cast<uint32_t>(value);
+                }
+
+                // Send acknowledgment
+                std::ostringstream ack;
+                ack << "{\"type\":\"configAck\",\"param\":\"" << param << "\",\"value\":" << value << "}";
+                wsServer_.broadcast(ack.str());
+            }
+            else if (type == "getConfig")
+            {
+                // Send current configuration
+                auto config = simulator_->getConfig();
+                std::ostringstream json;
+                json << std::fixed << std::setprecision(2);
+                json << "{\"type\":\"config\",";
+                json << "\"targetOPS\":" << config.targetOPS << ",";
+                json << "\"basePrice\":" << config.basePrice << ",";
+                json << "\"volatilityMultiplier\":" << std::setprecision(4) << config.volatilityMultiplier << ",";
+                json << "\"momentumStrength\":" << config.momentumStrength << ",";
+                json << "\"meanReversionStrength\":" << std::setprecision(6) << config.meanReversionStrength << ",";
+                json << "\"broadcastIntervalMs\":" << broadcastIntervalMs_ << ",";
+                json << "\"traderDistribution\":{";
+                json << "\"marketMaker\":" << std::setprecision(2) << config.marketMakerPct << ",";
+                json << "\"retail\":" << config.retailPct << ",";
+                json << "\"institutional\":" << config.institutionalPct << ",";
+                json << "\"algoMomentum\":" << config.algoMomentumPct << ",";
+                json << "\"algoMeanRevert\":" << config.algoMeanRevertPct;
+                json << "}}";
+                wsServer_.broadcast(json.str());
+            }
+        }
 
         void broadcastLoop()
         {

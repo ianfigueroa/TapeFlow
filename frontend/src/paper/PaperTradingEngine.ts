@@ -5,7 +5,9 @@ import type {
   AccountState,
   OrderSide,
   OrderType,
+  PaperTradingConfig,
 } from './types';
+import { DEFAULT_PAPER_TRADING_CONFIG } from './types';
 
 const INITIAL_BALANCE = 100000;
 
@@ -17,8 +19,13 @@ export class PaperTradingEngine {
   private orderIdCounter: number = 0;
   private tradeIdCounter: number = 0;
   private listeners: Set<() => void> = new Set();
+  private config: PaperTradingConfig;
+  
+  // Trailing stop tracking: orderId -> highest/lowest price seen
+  private trailingStopPrices: Map<string, number> = new Map();
 
-  constructor(initialBalance: number = INITIAL_BALANCE) {
+  constructor(initialBalance: number = INITIAL_BALANCE, config?: Partial<PaperTradingConfig>) {
+    this.config = { ...DEFAULT_PAPER_TRADING_CONFIG, ...config };
     this.account = {
       balance: initialBalance,
       initialBalance,
@@ -26,7 +33,19 @@ export class PaperTradingEngine {
       winCount: 0,
       lossCount: 0,
       totalTrades: 0,
+      totalCommission: 0,
+      totalSlippage: 0,
     };
+  }
+
+  // Update configuration at runtime
+  setConfig(config: Partial<PaperTradingConfig>): void {
+    this.config = { ...this.config, ...config };
+    this.notifyListeners();
+  }
+
+  getConfig(): PaperTradingConfig {
+    return { ...this.config };
   }
 
   placeOrder(
@@ -34,7 +53,14 @@ export class PaperTradingEngine {
     side: OrderSide,
     type: OrderType,
     quantity: number,
-    price?: number
+    price?: number,
+    options?: {
+      stopPrice?: number;
+      stopLoss?: number;
+      takeProfit?: number;
+      trailingAmount?: number;
+      trailingPercent?: boolean;
+    }
   ): PaperOrder {
     const order: PaperOrder = {
       id: `order-${++this.orderIdCounter}`,
@@ -42,7 +68,14 @@ export class PaperTradingEngine {
       side,
       type,
       quantity,
-      price: type === 'limit' ? price : undefined,
+      price: (type === 'limit' || type === 'stop-limit') ? price : undefined,
+      stopPrice: (type === 'stop' || type === 'stop-limit' || type === 'trailing-stop') 
+        ? (options?.stopPrice ?? price) 
+        : undefined,
+      trailingAmount: type === 'trailing-stop' ? options?.trailingAmount : undefined,
+      trailingPercent: type === 'trailing-stop' ? options?.trailingPercent : undefined,
+      stopLoss: options?.stopLoss,
+      takeProfit: options?.takeProfit,
       filledQuantity: 0,
       filledPrice: 0,
       status: 'pending',
@@ -55,47 +88,246 @@ export class PaperTradingEngine {
     return order;
   }
 
+  // Place a bracket order (entry + SL + TP)
+  placeBracketOrder(
+    symbol: string,
+    side: OrderSide,
+    type: 'market' | 'limit',
+    quantity: number,
+    entryPrice: number | undefined,
+    stopLoss: number,
+    takeProfit: number
+  ): PaperOrder {
+    const order = this.placeOrder(symbol, side, type, quantity, entryPrice, {
+      stopLoss,
+      takeProfit,
+    });
+    return order;
+  }
+
   cancelOrder(orderId: string): boolean {
     const order = this.orders.get(orderId);
-    if (!order || order.status !== 'pending') return false;
+    if (!order || (order.status !== 'pending' && order.status !== 'triggered')) return false;
 
     order.status = 'cancelled';
+    
+    // Also cancel any child orders
+    if (order.childOrderIds) {
+      for (const childId of order.childOrderIds) {
+        const child = this.orders.get(childId);
+        if (child && child.status === 'pending') {
+          child.status = 'cancelled';
+        }
+      }
+    }
+    
+    // Clean up trailing stop tracking
+    this.trailingStopPrices.delete(orderId);
+    
     this.notifyListeners();
     return true;
   }
 
   processMarketData(symbol: string, bestBid: number, bestAsk: number): void {
     const upperSymbol = symbol.toUpperCase();
+    const midPrice = (bestBid + bestAsk) / 2;
 
     for (const order of this.orders.values()) {
-      if (order.symbol !== upperSymbol || order.status !== 'pending') continue;
+      if (order.symbol !== upperSymbol) continue;
+      if (order.status !== 'pending' && order.status !== 'triggered') continue;
 
-      if (order.type === 'market') {
-        const fillPrice = order.side === 'buy' ? bestAsk : bestBid;
-        this.fillOrder(order, fillPrice);
-      } else if (order.type === 'limit' && order.price !== undefined) {
-        if (order.side === 'buy' && bestAsk <= order.price) {
-          this.fillOrder(order, order.price);
-        } else if (order.side === 'sell' && bestBid >= order.price) {
-          this.fillOrder(order, order.price);
-        }
+      switch (order.type) {
+        case 'market':
+          if (order.status === 'pending') {
+            const fillPrice = order.side === 'buy' ? bestAsk : bestBid;
+            this.fillOrder(order, fillPrice, bestBid, bestAsk);
+          }
+          break;
+
+        case 'limit':
+          if (order.price !== undefined) {
+            if (order.side === 'buy' && bestAsk <= order.price) {
+              this.fillOrder(order, order.price, bestBid, bestAsk);
+            } else if (order.side === 'sell' && bestBid >= order.price) {
+              this.fillOrder(order, order.price, bestBid, bestAsk);
+            }
+          }
+          break;
+
+        case 'stop':
+          if (order.stopPrice !== undefined) {
+            // Stop buy triggers when price rises above stopPrice
+            // Stop sell triggers when price falls below stopPrice
+            if (order.side === 'buy' && bestAsk >= order.stopPrice) {
+              this.fillOrder(order, bestAsk, bestBid, bestAsk);
+            } else if (order.side === 'sell' && bestBid <= order.stopPrice) {
+              this.fillOrder(order, bestBid, bestBid, bestAsk);
+            }
+          }
+          break;
+
+        case 'stop-limit':
+          if (order.stopPrice !== undefined && order.price !== undefined) {
+            // First check if stop is triggered
+            if (order.status === 'pending') {
+              if (order.side === 'buy' && bestAsk >= order.stopPrice) {
+                order.status = 'triggered';
+              } else if (order.side === 'sell' && bestBid <= order.stopPrice) {
+                order.status = 'triggered';
+              }
+            }
+            // If triggered, act as limit order
+            if (order.status === 'triggered') {
+              if (order.side === 'buy' && bestAsk <= order.price) {
+                this.fillOrder(order, order.price, bestBid, bestAsk);
+              } else if (order.side === 'sell' && bestBid >= order.price) {
+                this.fillOrder(order, order.price, bestBid, bestAsk);
+              }
+            }
+          }
+          break;
+
+        case 'trailing-stop':
+          this.processTrailingStop(order, bestBid, bestAsk);
+          break;
       }
     }
 
-    this.updatePositionPrice(upperSymbol, (bestBid + bestAsk) / 2);
+    // Check bracket order SL/TP for open positions
+    this.checkBracketOrders(upperSymbol, bestBid, bestAsk);
+
+    this.updatePositionPrice(upperSymbol, midPrice);
   }
 
-  private fillOrder(order: PaperOrder, price: number): void {
+  private processTrailingStop(order: PaperOrder, bestBid: number, bestAsk: number): void {
+    if (order.trailingAmount === undefined) return;
+
+    const currentPrice = order.side === 'sell' ? bestBid : bestAsk;
+    const trackingPrice = this.trailingStopPrices.get(order.id);
+
+    if (order.side === 'sell') {
+      // For sell trailing stop: track highest price, trigger when price drops by trailingAmount
+      const highestPrice = trackingPrice ?? currentPrice;
+      const newHighest = Math.max(highestPrice, currentPrice);
+      this.trailingStopPrices.set(order.id, newHighest);
+
+      const triggerDistance = order.trailingPercent 
+        ? newHighest * (order.trailingAmount / 100)
+        : order.trailingAmount;
+      const triggerPrice = newHighest - triggerDistance;
+
+      if (bestBid <= triggerPrice) {
+        this.fillOrder(order, bestBid, bestBid, bestAsk);
+        this.trailingStopPrices.delete(order.id);
+      }
+    } else {
+      // For buy trailing stop: track lowest price, trigger when price rises by trailingAmount
+      const lowestPrice = trackingPrice ?? currentPrice;
+      const newLowest = Math.min(lowestPrice, currentPrice);
+      this.trailingStopPrices.set(order.id, newLowest);
+
+      const triggerDistance = order.trailingPercent
+        ? newLowest * (order.trailingAmount / 100)
+        : order.trailingAmount;
+      const triggerPrice = newLowest + triggerDistance;
+
+      if (bestAsk >= triggerPrice) {
+        this.fillOrder(order, bestAsk, bestBid, bestAsk);
+        this.trailingStopPrices.delete(order.id);
+      }
+    }
+  }
+
+  private checkBracketOrders(symbol: string, bestBid: number, bestAsk: number): void {
+    const position = this.positions.get(symbol);
+    if (!position || position.side === 'flat') return;
+
+    // Find filled orders with SL/TP for this position
+    for (const order of this.orders.values()) {
+      if (order.symbol !== symbol || order.status !== 'filled') continue;
+      if (!order.stopLoss && !order.takeProfit) continue;
+
+      // Check if SL/TP orders already exist
+      if (order.childOrderIds && order.childOrderIds.length > 0) continue;
+
+      const childIds: string[] = [];
+
+      // Create SL order if set
+      if (order.stopLoss) {
+        const slSide: OrderSide = position.side === 'long' ? 'sell' : 'buy';
+        const slOrder = this.placeOrder(symbol, slSide, 'stop', position.quantity, undefined, {
+          stopPrice: order.stopLoss,
+        });
+        slOrder.parentOrderId = order.id;
+        childIds.push(slOrder.id);
+      }
+
+      // Create TP order if set
+      if (order.takeProfit) {
+        const tpSide: OrderSide = position.side === 'long' ? 'sell' : 'buy';
+        const tpOrder = this.placeOrder(symbol, tpSide, 'limit', position.quantity, order.takeProfit);
+        tpOrder.parentOrderId = order.id;
+        childIds.push(tpOrder.id);
+      }
+
+      order.childOrderIds = childIds;
+    }
+
+    // Cancel opposing bracket leg when one fills
+    for (const order of this.orders.values()) {
+      if (order.parentOrderId && order.status === 'filled') {
+        const parent = this.orders.get(order.parentOrderId);
+        if (parent?.childOrderIds) {
+          for (const siblingId of parent.childOrderIds) {
+            if (siblingId !== order.id) {
+              const sibling = this.orders.get(siblingId);
+              if (sibling && sibling.status === 'pending') {
+                sibling.status = 'cancelled';
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private calculateSlippage(basePrice: number, side: OrderSide): number {
+    if (!this.config.slippageEnabled) return 0;
+
+    const randomFactor = (Math.random() - 0.5) * 2 * this.config.slippageVolatility;
+    const slippagePercent = this.config.slippagePercent + randomFactor;
+    
+    // Slippage is always unfavorable: higher for buys, lower for sells
+    return side === 'buy' 
+      ? basePrice * (slippagePercent / 100)
+      : -basePrice * (slippagePercent / 100);
+  }
+
+  private calculateCommission(fillValue: number): number {
+    if (!this.config.commissionEnabled) return 0;
+
+    const commission = fillValue * (this.config.commissionPercent / 100);
+    return Math.max(commission, this.config.commissionMin);
+  }
+
+  private fillOrder(order: PaperOrder, basePrice: number, bestBid: number, bestAsk: number): void {
     const position = this.getOrCreatePosition(order.symbol);
     const fillQuantity = order.quantity - order.filledQuantity;
-    const fillValue = fillQuantity * price;
+    
+    // Apply slippage to get actual fill price
+    const slippage = this.calculateSlippage(basePrice, order.side);
+    const fillPrice = basePrice + slippage;
+    const fillValue = fillQuantity * fillPrice;
+    
+    // Calculate commission
+    const commission = this.calculateCommission(fillValue);
 
     let pnl = 0;
 
     if (order.side === 'buy') {
       if (position.side === 'short') {
         const closingQty = Math.min(fillQuantity, position.quantity);
-        pnl = closingQty * (position.entryPrice - price);
+        pnl = closingQty * (position.entryPrice - fillPrice);
         this.recordPnL(pnl);
 
         if (closingQty >= position.quantity) {
@@ -103,7 +335,7 @@ export class PaperTradingEngine {
           if (remainingQty > 0) {
             position.side = 'long';
             position.quantity = remainingQty;
-            position.entryPrice = price;
+            position.entryPrice = fillPrice;
           } else {
             position.side = 'flat';
             position.quantity = 0;
@@ -115,7 +347,7 @@ export class PaperTradingEngine {
       } else {
         if (position.side === 'flat') {
           position.side = 'long';
-          position.entryPrice = price;
+          position.entryPrice = fillPrice;
           position.quantity = fillQuantity;
         } else {
           const totalValue = position.quantity * position.entryPrice + fillValue;
@@ -127,7 +359,7 @@ export class PaperTradingEngine {
     } else {
       if (position.side === 'long') {
         const closingQty = Math.min(fillQuantity, position.quantity);
-        pnl = closingQty * (price - position.entryPrice);
+        pnl = closingQty * (fillPrice - position.entryPrice);
         this.recordPnL(pnl);
 
         if (closingQty >= position.quantity) {
@@ -135,7 +367,7 @@ export class PaperTradingEngine {
           if (remainingQty > 0) {
             position.side = 'short';
             position.quantity = remainingQty;
-            position.entryPrice = price;
+            position.entryPrice = fillPrice;
           } else {
             position.side = 'flat';
             position.quantity = 0;
@@ -147,7 +379,7 @@ export class PaperTradingEngine {
       } else {
         if (position.side === 'flat') {
           position.side = 'short';
-          position.entryPrice = price;
+          position.entryPrice = fillPrice;
           position.quantity = fillQuantity;
         } else {
           const totalValue = position.quantity * position.entryPrice + fillValue;
@@ -158,8 +390,15 @@ export class PaperTradingEngine {
       }
     }
 
+    // Deduct commission from balance
+    this.account.balance -= commission;
+    this.account.totalCommission += commission;
+    this.account.totalSlippage += Math.abs(slippage) * fillQuantity;
+
     order.filledQuantity = order.quantity;
-    order.filledPrice = price;
+    order.filledPrice = fillPrice;
+    order.slippage = slippage;
+    order.commission = commission;
     order.status = 'filled';
     order.filledAt = Date.now();
 
@@ -169,15 +408,17 @@ export class PaperTradingEngine {
       symbol: order.symbol,
       side: order.side,
       quantity: fillQuantity,
-      price,
+      price: fillPrice,
       timestamp: Date.now(),
       pnl,
+      slippage,
+      commission,
     };
 
     this.trades.push(trade);
     this.account.totalTrades++;
 
-    this.updatePositionPrice(order.symbol, price);
+    this.updatePositionPrice(order.symbol, fillPrice);
     this.notifyListeners();
   }
 
@@ -231,7 +472,9 @@ export class PaperTradingEngine {
   }
 
   getOpenOrders(): PaperOrder[] {
-    return Array.from(this.orders.values()).filter((o) => o.status === 'pending');
+    return Array.from(this.orders.values()).filter(
+      (o) => o.status === 'pending' || o.status === 'triggered'
+    );
   }
 
   getOrderHistory(): PaperOrder[] {
@@ -275,6 +518,7 @@ export class PaperTradingEngine {
     this.orders.clear();
     this.positions.clear();
     this.trades = [];
+    this.trailingStopPrices.clear();
     this.orderIdCounter = 0;
     this.tradeIdCounter = 0;
     this.account = {
@@ -284,6 +528,8 @@ export class PaperTradingEngine {
       winCount: 0,
       lossCount: 0,
       totalTrades: 0,
+      totalCommission: 0,
+      totalSlippage: 0,
     };
     this.notifyListeners();
   }
