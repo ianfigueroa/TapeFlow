@@ -17,6 +17,7 @@ type NewsArticle = NewsItem & { published_on?: number };
 interface NewsFeedProps {
   symbol: string;
   className?: string;
+  compact?: boolean;
 }
 
 // Sentiment badge colors
@@ -109,6 +110,7 @@ function NewsItem({ article }: { article: NewsArticle }) {
 export const NewsFeed = memo(function NewsFeed({
   symbol,
   className,
+  compact: _compact = false,
 }: NewsFeedProps) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);

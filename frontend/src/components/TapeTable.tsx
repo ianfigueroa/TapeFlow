@@ -80,6 +80,7 @@ interface TapeTableProps {
   showAnalytics?: boolean;
   maxHeight?: string;
   onTradeClick?: (trade: TradeWithAnalytics) => void;
+  compact?: boolean;
 }
 
 interface TradeRowProps {
@@ -245,6 +246,7 @@ export function TapeTable({
   showAnalytics = true,
   maxHeight = 'calc(100vh - 200px)',
   onTradeClick,
+  compact = false,
 }: TapeTableProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [displayTrades, setDisplayTrades] = useState<TradeWithAnalytics[]>([]);

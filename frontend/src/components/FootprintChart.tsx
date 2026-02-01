@@ -6,8 +6,8 @@ import type { TradeWithAnalytics } from '../types';
 interface FootprintChartProps {
   trades: TradeWithAnalytics[];
   symbol: string;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   clusterIntervalMs?: number;
   tickSize?: number;
   className?: string;
@@ -16,8 +16,8 @@ interface FootprintChartProps {
 export function FootprintChart({
   trades,
   symbol,
-  width,
-  height,
+  width = 400,
+  height = 300,
   clusterIntervalMs = 60000,
   tickSize,
   className,

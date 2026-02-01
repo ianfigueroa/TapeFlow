@@ -22,6 +22,7 @@ import type { Trade } from '../types';
 interface SentimentPanelProps {
   symbol: string;
   className?: string;
+  compact?: boolean;
 }
 
 // Sparkline component for sentiment history
@@ -130,6 +131,7 @@ function IndicatorRow({
 export const SentimentPanel = memo(function SentimentPanel({
   symbol,
   className,
+  compact: _compact = false,
 }: SentimentPanelProps) {
   const [signal, setSignal] = useState<SentimentSignal | null>(null);
   const [history, setHistory] = useState<SentimentHistory[]>([]);

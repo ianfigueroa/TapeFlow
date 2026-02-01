@@ -18,6 +18,7 @@ import type { Trade } from '../../types';
 interface AnalysisDashboardProps {
   symbol: string;
   className?: string;
+  compact?: boolean;
 }
 
 // Stat card component
@@ -93,6 +94,7 @@ function CVDMiniChart({ values, width = 100, height = 24 }: { values: number[]; 
 export const AnalysisDashboard = memo(function AnalysisDashboard({
   symbol,
   className,
+  compact: _compact = false,
 }: AnalysisDashboardProps) {
   const [snapshot, setSnapshot] = useState<AnalyticsSnapshot | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);

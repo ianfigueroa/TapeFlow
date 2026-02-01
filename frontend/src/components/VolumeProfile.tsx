@@ -26,6 +26,7 @@ interface VolumeLevel {
 interface VolumeProfileProps {
   symbol: string;
   className?: string;
+  compact?: boolean;
 }
 
 // Format volume for display
@@ -141,6 +142,7 @@ function VolumeBar({
 export const VolumeProfile = memo(function VolumeProfile({
   symbol,
   className,
+  compact: _compact = false,
 }: VolumeProfileProps) {
   const [profile, setProfile] = useState<VolumeProfileResult | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
