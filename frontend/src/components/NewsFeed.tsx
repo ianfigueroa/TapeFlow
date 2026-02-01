@@ -6,6 +6,8 @@
  * - Source attribution
  * - Relative timestamps
  * - Click to expand with full article link
+ * 
+ * Updated: Improved typography for readability (larger text, better line height)
  */
 
 import { useState, useEffect, memo, useCallback } from 'react';
@@ -32,23 +34,23 @@ function getSentimentBadge(sentiment: string | undefined): { text: string; class
   }
 }
 
-// Individual news item
-function NewsItem({ article }: { article: NewsArticle }) {
+// Individual news item with improved typography
+function NewsItemComponent({ article, compact: _compact }: { article: NewsArticle; compact?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const sentiment = getSentimentBadge(article.sentiment);
   
   return (
     <div 
       className={cn(
-        "p-2 border-b border-gray-800/50 hover:bg-gray-900/50 cursor-pointer transition-colors",
+        "px-3 py-2.5 border-b border-gray-800/50 hover:bg-gray-900/50 cursor-pointer transition-colors",
         isExpanded && "bg-gray-900/30"
       )}
       onClick={() => setIsExpanded(!isExpanded)}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2.5">
         {/* Sentiment badge */}
         <span className={cn(
-          "px-1 py-0.5 text-[10px] rounded border font-medium flex-shrink-0 mt-0.5",
+          "px-1.5 py-0.5 text-[10px] rounded border font-semibold flex-shrink-0 mt-0.5",
           sentiment.className
         )}>
           {sentiment.text}
@@ -57,7 +59,8 @@ function NewsItem({ article }: { article: NewsArticle }) {
         {/* Title and meta */}
         <div className="flex-1 min-w-0">
           <h4 className={cn(
-            "text-xs font-medium text-gray-200 leading-tight",
+            // IMPROVED: Larger font, better line height for readability
+            "text-sm font-medium text-gray-100 leading-relaxed",
             !isExpanded && "line-clamp-2"
           )}>
             {article.title}
@@ -65,24 +68,27 @@ function NewsItem({ article }: { article: NewsArticle }) {
           
           {/* Expanded content */}
           {isExpanded && article.body && (
-            <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
-              {article.body.length > 200 ? article.body.slice(0, 200) + '...' : article.body}
+            <p className={cn(
+              // IMPROVED: Better font size and line height for body text
+              "text-sm text-gray-400 mt-2 leading-relaxed"
+            )}>
+              {article.body.length > 300 ? article.body.slice(0, 300) + '...' : article.body}
             </p>
           )}
           
           {/* Meta row */}
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] text-gray-600">
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-xs text-gray-500">
               {formatNewsTime(article.published_on || article.publishedAt || Date.now())}
             </span>
-            <span className="text-[10px] text-gray-700">·</span>
-            <span className="text-[10px] text-orange-500/70">
+            <span className="text-xs text-gray-700">·</span>
+            <span className="text-xs text-orange-500/80 font-medium">
               {article.source}
             </span>
             {article.tags && article.tags.length > 0 && (
               <>
-                <span className="text-[10px] text-gray-700">·</span>
-                <span className="text-[10px] text-gray-600">
+                <span className="text-xs text-gray-700">·</span>
+                <span className="text-xs text-gray-500">
                   {article.tags.slice(0, 2).join(', ')}
                 </span>
               </>
@@ -95,7 +101,7 @@ function NewsItem({ article }: { article: NewsArticle }) {
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 mt-2 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+              className="inline-flex items-center gap-1 mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
               onClick={(e) => e.stopPropagation()}
             >
               Read full article →
@@ -110,12 +116,11 @@ function NewsItem({ article }: { article: NewsArticle }) {
 export const NewsFeed = memo(function NewsFeed({
   symbol,
   className,
-  compact: _compact = false,
+  compact = false,
 }: NewsFeedProps) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   
   // Fetch initial news
@@ -175,21 +180,20 @@ export const NewsFeed = memo(function NewsFeed({
   
   return (
     <div className={cn(
-      "bg-black rounded border border-gray-800 overflow-hidden font-mono flex flex-col",
+      "bg-black rounded border border-gray-800 overflow-hidden font-mono flex flex-col h-full",
       className
     )}>
       {/* Header */}
       <div 
-        className="flex items-center justify-between p-2 border-b border-gray-800 cursor-pointer hover:bg-gray-900/50 transition-colors flex-shrink-0"
-        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-gray-900/30 flex-shrink-0"
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs text-orange-500 uppercase">&gt;&gt; NEWS</span>
+          <span className="text-xs text-blue-400 font-semibold uppercase tracking-wider">NEWS</span>
           <span className="text-xs text-gray-600">
             {symbol.toUpperCase()}
           </span>
           {articles.length > 0 && (
-            <span className="px-1 py-0.5 text-[10px] bg-gray-800 text-gray-400 rounded">
+            <span className="px-1.5 py-0.5 text-[10px] bg-gray-800 text-gray-400 rounded">
               {articles.length}
             </span>
           )}
@@ -205,45 +209,42 @@ export const NewsFeed = memo(function NewsFeed({
               e.stopPropagation();
               loadNews();
             }}
-            className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors px-1"
+            className="text-xs text-gray-600 hover:text-gray-400 transition-colors px-1"
             title="Refresh news"
           >
             ↻
           </button>
-          <span className="text-gray-600 text-xs">{isExpanded ? '[-]' : '[+]'}</span>
         </div>
       </div>
       
-      {/* Content */}
-      {isExpanded && (
-        <div className="flex-1 overflow-y-auto min-h-0" style={{ maxHeight: '300px' }}>
-          {isLoading && articles.length === 0 ? (
-            <div className="flex items-center justify-center p-4 text-gray-600 text-xs">
-              <span className="animate-pulse">Loading news...</span>
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center p-4 text-xs">
-              <span className="text-[#FF4545]">{error}</span>
-              <button 
-                onClick={loadNews}
-                className="mt-2 text-gray-500 hover:text-gray-400 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          ) : articles.length === 0 ? (
-            <div className="flex items-center justify-center p-4 text-gray-600 text-xs">
-              No recent news for {symbol.toUpperCase()}
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-800/50">
-              {articles.map((article) => (
-                <NewsItem key={article.id} article={article} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Content - Scrollable with full height */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {isLoading && articles.length === 0 ? (
+          <div className="flex items-center justify-center p-6 text-gray-600 text-sm">
+            <span className="animate-pulse">Loading news...</span>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-6 text-sm">
+            <span className="text-[#FF4545]">{error}</span>
+            <button 
+              onClick={loadNews}
+              className="mt-2 text-gray-500 hover:text-gray-400 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : articles.length === 0 ? (
+          <div className="flex items-center justify-center p-6 text-gray-600 text-sm">
+            No recent news for {symbol.toUpperCase()}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-800/50">
+            {articles.map((article) => (
+              <NewsItemComponent key={article.id} article={article} compact={compact} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

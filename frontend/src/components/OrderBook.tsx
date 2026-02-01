@@ -1,6 +1,7 @@
 // Level 2 order book with heatmap visualization
+// Optimized with requestAnimationFrame batching for high-frequency updates
 
-import { useMemo, useEffect, useRef, useState } from 'react';
+import { useMemo, useEffect, useRef, useState, useCallback, memo } from 'react';
 import { cn } from '../lib/utils';
 import { formatPrice, formatOrderBookSize } from '../utils/formatters';
 import type { OrderBook as OrderBookType, OrderBookLevel, AssetType } from '../types';
@@ -8,7 +9,8 @@ import { calculateOrderBookImbalance, getMidPrice } from '../utils/calculations'
 import { globalClock } from '../services/globalClock';
 import { flushOrderBookBuffer } from '../services/dataBuffer';
 
-const RENDER_INTERVAL_MS = 50;
+// RAF-based render batching
+const BATCH_RENDER_INTERVAL_MS = 33; // ~30fps for order book (sufficient for human perception)
 
 interface OrderBookProps {
   orderBook: OrderBookType | null;
@@ -18,7 +20,8 @@ interface OrderBookProps {
   showHeatmap?: boolean;
 }
 
-function HeatmapBar({ intensity, side }: { intensity: number; side: 'bid' | 'ask' }) {
+// Memoized heatmap bar for perf
+const HeatmapBar = memo(function HeatmapBar({ intensity, side }: { intensity: number; side: 'bid' | 'ask' }) {
   const color = side === 'bid' ? 'bg-[#00FF41]' : 'bg-[#FF4545]';
   return (
     <div 
@@ -26,9 +29,52 @@ function HeatmapBar({ intensity, side }: { intensity: number; side: 'bid' | 'ask
       style={{ width: `${intensity * 100}%`, opacity: 0.08 + intensity * 0.12 }}
     />
   );
-}
+});
 
-function OrderBookSide({
+// Memoized order book row to prevent unnecessary re-renders
+const OrderBookRow = memo(function OrderBookRow({
+  level,
+  side,
+  maxSize,
+  assetType,
+  showHeatmap,
+  index: _index,
+}: {
+  level: OrderBookLevel;
+  side: 'bid' | 'ask';
+  maxSize: number;
+  assetType: AssetType;
+  showHeatmap: boolean;
+  index: number;
+}) {
+  const intensity = maxSize > 0 ? Math.min(level.size / maxSize, 1) : 0;
+  const isBid = side === 'bid';
+  
+  return (
+    <div className="relative grid grid-cols-2 gap-2 px-2 py-1 text-xs font-mono hover:bg-gray-900/50">
+      {showHeatmap && <HeatmapBar intensity={intensity} side={side} />}
+      {isBid ? (
+        <>
+          <span className="text-left text-gray-400 relative z-10 tabular-nums">{formatOrderBookSize(level.size)}</span>
+          <span className="text-right text-[#00FF41] font-medium relative z-10 tabular-nums">{formatPrice(level.price, assetType)}</span>
+        </>
+      ) : (
+        <>
+          <span className="text-left text-[#FF4545] font-medium relative z-10 tabular-nums">{formatPrice(level.price, assetType)}</span>
+          <span className="text-right text-gray-400 relative z-10 tabular-nums">{formatOrderBookSize(level.size)}</span>
+        </>
+      )}
+    </div>
+  );
+}, (prev, next) => {
+  // Custom equality check - only re-render if data actually changed
+  return prev.level.price === next.level.price && 
+         prev.level.size === next.level.size &&
+         prev.maxSize === next.maxSize;
+});
+
+// Memoized side component
+const OrderBookSide = memo(function OrderBookSide({
   levels, side, maxSize, assetType, showHeatmap
 }: {
   levels: OrderBookLevel[];
@@ -40,9 +86,9 @@ function OrderBookSide({
   const isBid = side === 'bid';
   
   return (
-    <div className="flex-1">
+    <div className="flex-1 min-w-0">
       <div className={cn(
-        "grid grid-cols-2 gap-2 px-2 py-1.5 text-xs font-mono uppercase tracking-wider border-b border-gray-800",
+        "grid grid-cols-2 gap-2 px-2 py-1.5 text-[10px] font-mono uppercase tracking-wider border-b border-gray-800",
         isBid ? "text-[#00FF41]" : "text-[#FF4545]"
       )}>
         {isBid ? (
@@ -52,30 +98,22 @@ function OrderBookSide({
         )}
       </div>
       
-      <div className="divide-y divide-gray-900/50">
-        {levels.map((level, i) => {
-          const intensity = maxSize > 0 ? Math.min(level.size / maxSize, 1) : 0;
-          return (
-            <div key={`${side}-${i}-${level.price}`} className="relative grid grid-cols-2 gap-2 px-2 py-1 text-xs font-mono hover:bg-gray-900/50">
-              {showHeatmap && <HeatmapBar intensity={intensity} side={side} />}
-              {isBid ? (
-                <>
-                  <span className="text-left text-gray-400 relative z-10 tabular-nums">{formatOrderBookSize(level.size)}</span>
-                  <span className="text-right text-[#00FF41] font-medium relative z-10 tabular-nums">{formatPrice(level.price, assetType)}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-left text-[#FF4545] font-medium relative z-10 tabular-nums">{formatPrice(level.price, assetType)}</span>
-                  <span className="text-right text-gray-400 relative z-10 tabular-nums">{formatOrderBookSize(level.size)}</span>
-                </>
-              )}
-            </div>
-          );
-        })}
+      <div className="divide-y divide-gray-900/30">
+        {levels.map((level, i) => (
+          <OrderBookRow
+            key={`${side}-${i}-${level.price}`}
+            level={level}
+            side={side}
+            maxSize={maxSize}
+            assetType={assetType}
+            showHeatmap={showHeatmap}
+            index={i}
+          />
+        ))}
       </div>
     </div>
   );
-}
+});
 
 export function OrderBook({
   orderBook: externalOrderBook, assetType, symbol, maxLevels = 15, showHeatmap = true
@@ -84,28 +122,67 @@ export function OrderBook({
   const agoRef = useRef<HTMLSpanElement>(null);
   const orderBookTimestampRef = useRef<number>(0);
   
+  // Use refs for RAF batching - avoid React state updates on every tick
+  const latestOrderBookRef = useRef<OrderBookType | null>(null);
+  const hasNewDataRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+  const lastRenderTimeRef = useRef(0);
+  
   const [displayOrderBook, setDisplayOrderBook] = useState<OrderBookType | null>(null);
   const [stats, setStats] = useState({ updatesPerSecond: 0 });
   const updateCountRef = useRef(0);
   const lastStatsUpdateRef = useRef(Date.now());
   
+  // RAF-based render loop - batch updates and render at throttled rate
+  const rafCallback = useCallback(() => {
+    const now = performance.now();
+    
+    // Only render if enough time has passed and we have new data
+    if (hasNewDataRef.current && now - lastRenderTimeRef.current >= BATCH_RENDER_INTERVAL_MS) {
+      const newOB = latestOrderBookRef.current;
+      if (newOB) {
+        setDisplayOrderBook(newOB);
+        hasNewDataRef.current = false;
+        lastRenderTimeRef.current = now;
+      }
+    }
+    
+    rafIdRef.current = requestAnimationFrame(rafCallback);
+  }, []);
+  
+  // Start RAF loop and data polling
   useEffect(() => {
     if (!symbol) return;
+    
+    // Start RAF render loop
+    rafIdRef.current = requestAnimationFrame(rafCallback);
+    
+    // Data polling interval - fetch data but don't trigger state updates
     const intervalId = setInterval(() => {
       const { orderBook: newOB, hasNewData, updateCount } = flushOrderBookBuffer(symbol);
       if (!hasNewData || !newOB) return;
       
-      setDisplayOrderBook(newOB);
+      // Store in ref - RAF loop will batch render
+      latestOrderBookRef.current = newOB;
+      hasNewDataRef.current = true;
       updateCountRef.current += updateCount;
+      
+      // Update stats less frequently
       const now = Date.now();
       if (now - lastStatsUpdateRef.current >= 1000) {
         setStats({ updatesPerSecond: updateCountRef.current });
         updateCountRef.current = 0;
         lastStatsUpdateRef.current = now;
       }
-    }, RENDER_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, [symbol]);
+    }, 16); // Poll at 60fps, but render at 30fps
+    
+    return () => {
+      clearInterval(intervalId);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, [symbol, rafCallback]);
   
   const orderBook = symbol ? displayOrderBook : externalOrderBook;
   

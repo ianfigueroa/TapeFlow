@@ -238,7 +238,7 @@ export class PaperTradingEngine {
     }
   }
 
-  private checkBracketOrders(symbol: string, bestBid: number, bestAsk: number): void {
+  private checkBracketOrders(symbol: string, _bestBid: number, _bestAsk: number): void {
     const position = this.positions.get(symbol);
     if (!position || position.side === 'flat') return;
 
@@ -310,7 +310,7 @@ export class PaperTradingEngine {
     return Math.max(commission, this.config.commissionMin);
   }
 
-  private fillOrder(order: PaperOrder, basePrice: number, bestBid: number, bestAsk: number): void {
+  private fillOrder(order: PaperOrder, basePrice: number, _bestBid: number, _bestAsk: number): void {
     const position = this.getOrCreatePosition(order.symbol);
     const fillQuantity = order.quantity - order.filledQuantity;
     

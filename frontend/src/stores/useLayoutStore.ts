@@ -1,9 +1,9 @@
-// Layout store for react-grid-layout persistence
+// Layout store for layout persistence
 // Manages panel positions, sizes, presets, and visibility
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { LayoutItem } from 'react-grid-layout';
+import type { LayoutItem } from '../types/layout';
 import type { PanelId, LayoutPreset, LayoutState, LayoutActions, Layouts } from '../types/layout';
 
 export const STORAGE_KEY = 'tapeflow-layout';
@@ -161,7 +161,7 @@ function cloneLayouts(layouts: Layouts): Layouts {
   return Object.fromEntries(
     Object.entries(layouts).map(([key, value]) => [
       key,
-      value ? value.map((item) => ({ ...item })) : undefined,
+      value ? (value as LayoutItem[]).map((item: LayoutItem) => ({ ...item })) : undefined,
     ])
   ) as Layouts;
 }

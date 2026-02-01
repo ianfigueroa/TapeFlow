@@ -18,6 +18,14 @@ export class OverlayLayer implements Layer {
     }
   }
 
+  getCurrentPrice(): number {
+    return this.currentPrice;
+  }
+
+  getCurrentTime(): number {
+    return this.currentTime;
+  }
+
   render(ctx: CanvasRenderingContext2D, rc: RenderContext): void {
     if (!this.showCrosshair || this.mouseX < 0 || this.mouseY < 0) return;
 
