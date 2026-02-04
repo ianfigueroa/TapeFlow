@@ -66,11 +66,13 @@ export interface PaperTradingConfig {
   // Slippage settings
   slippageEnabled: boolean;
   slippagePercent: number;       // Base slippage as percentage (e.g., 0.05 = 0.05%)
+  slippageBps: number;           // Slippage in basis points (e.g., 5 = 0.05%)
   slippageVolatility: number;    // Additional random slippage factor
   
   // Commission settings  
   commissionEnabled: boolean;
   commissionPercent: number;     // Commission as percentage (e.g., 0.1 = 0.1%)
+  feeBps: number;                // Fee in basis points (e.g., 4 = 0.04%)
   commissionMin: number;         // Minimum commission per trade
   
   // Execution settings
@@ -94,10 +96,12 @@ export interface RiskCheckResult {
 export const DEFAULT_PAPER_TRADING_CONFIG: PaperTradingConfig = {
   slippageEnabled: true,
   slippagePercent: 0.02,        // 0.02% base slippage
+  slippageBps: 2,               // 2 bps
   slippageVolatility: 0.01,     // +/- 0.01% random
   
   commissionEnabled: true,
   commissionPercent: 0.075,     // 0.075% (similar to Binance maker)
+  feeBps: 8,                    // 8 bps
   commissionMin: 0.01,          // $0.01 minimum
   
   partialFillsEnabled: false,
