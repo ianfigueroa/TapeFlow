@@ -1,6 +1,6 @@
 # TapeFlow
 
-![TapeFlow v2](./tapeflow_v2.png)
+![TapeFlow v2](./docs/tapeflow_v2.png)
 
 Production-grade real-time trading terminal for order flow analysis. Designed for low-latency visualization of high-frequency cryptocurrency market data with professional-grade tooling for tape reading, footprint analysis, and paper trading.
 
