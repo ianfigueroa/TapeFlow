@@ -3,7 +3,15 @@
 import { create } from 'zustand';
 import { PaperTradingEngine } from '../paper/PaperTradingEngine';
 import { subscribeToTrades, getCurrentOrderBook } from '../services/dataBuffer';
-import type { Position, PaperOrder, TradeRecord, AccountState, OrderSide, OrderType } from '../paper/types';
+import type { Position, PaperOrder, TradeRecord, AccountState, OrderSide, OrderType, PaperTradingConfig } from '../paper/types';
+
+interface RiskStatus {
+  dailyLoss: number;
+  dailyLossLimit: number;
+  openPositions: number;
+  maxPositions: number;
+  isLocked: boolean;
+}
 
 interface PaperTradingState {
   enabled: boolean;
@@ -17,6 +25,9 @@ interface PaperTradingState {
   tradeHistory: TradeRecord[];
   equity: number;
   winRate: number;
+  riskStatus: RiskStatus;
+  settings: Partial<PaperTradingConfig>;
+  balance: number;
 
   // Actions
   setEnabled: (enabled: boolean) => void;
@@ -26,6 +37,7 @@ interface PaperTradingState {
   flattenPosition: (symbol: string) => void;
   reset: (initialBalance?: number) => void;
   refreshState: () => void;
+  updateSettings: (settings: Partial<PaperTradingConfig>) => void;
 }
 
 // Create singleton engine instance
@@ -95,6 +107,9 @@ export const usePaperTradingStore = create<PaperTradingState>((set, get) => {
     tradeHistory: [],
     equity: engine.getTotalEquity(),
     winRate: engine.getWinRate(),
+    riskStatus: engine.getRiskStatus(),
+    settings: engine.getConfig(),
+    balance: engine.getAccount().balance,
 
     setEnabled: (enabled) => {
       set({ enabled });
@@ -161,7 +176,15 @@ export const usePaperTradingStore = create<PaperTradingState>((set, get) => {
         tradeHistory: engine.getTradeHistory(),
         equity: engine.getTotalEquity(),
         winRate: engine.getWinRate(),
+        riskStatus: engine.getRiskStatus(),
+        settings: engine.getConfig(),
+        balance: engine.getAccount().balance,
       });
+    },
+
+    updateSettings: (settings) => {
+      engine.setConfig(settings);
+      get().refreshState();
     },
   };
 });

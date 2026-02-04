@@ -76,6 +76,19 @@ export interface PaperTradingConfig {
   // Execution settings
   partialFillsEnabled: boolean;  // Allow partial fills on limit orders
   marketImpactEnabled: boolean;  // Simulate market impact on large orders
+  
+  // Risk controls
+  riskEnabled: boolean;           // Enable risk limit checks
+  maxPositionSize: number;        // Max position size in USD
+  maxDailyLoss: number;           // Max daily loss limit in USD
+  maxOpenPositions: number;       // Max number of concurrent positions
+  maxOrderSize: number;           // Max single order size in USD
+}
+
+// Risk control check result
+export interface RiskCheckResult {
+  allowed: boolean;
+  reason?: string;
 }
 
 export const DEFAULT_PAPER_TRADING_CONFIG: PaperTradingConfig = {
@@ -89,4 +102,11 @@ export const DEFAULT_PAPER_TRADING_CONFIG: PaperTradingConfig = {
   
   partialFillsEnabled: false,
   marketImpactEnabled: false,
+  
+  // Risk controls - defaults
+  riskEnabled: true,
+  maxPositionSize: 100000,      // $100K max position
+  maxDailyLoss: 5000,           // $5K daily loss limit
+  maxOpenPositions: 5,          // 5 concurrent positions max
+  maxOrderSize: 50000,          // $50K max single order
 };
