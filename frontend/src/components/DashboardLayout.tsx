@@ -291,7 +291,9 @@ export function DashboardLayout() {
                 borderColor: settings.pauseScroll ? 'var(--tf-accent-warning)' : 'var(--tf-border-primary)',
                 color: settings.pauseScroll ? 'var(--tf-accent-warning)' : undefined
               }}
-              title={settings.pauseScroll ? "Resume" : "Pause"}
+              title={settings.pauseScroll 
+                ? "Resume Time & Sales auto-scroll (Spacebar)" 
+                : "Pause Time & Sales auto-scroll to inspect trades (Spacebar)"}
             >
               {settings.pauseScroll ? <PlayIcon /> : <PauseIcon />}
             </button>
