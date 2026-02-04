@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { cn } from '../lib/utils';
 import { subscribeToTrades, getCurrentOrderBook, getTradeRate, resetTradeRateTracker } from '../services/dataBuffer';
 import { formatPrice } from '../utils/formatters';
+import { alertManager, type AlertType } from '../utils/AlertManager';
 import type { Trade } from '../types';
 
 type SignalType = 'whale' | 'velocity' | 'spoof' | 'wall' | 'imbalance';
@@ -87,7 +88,19 @@ export const AlgoSignals = memo(function AlgoSignals({
   }, []);
   
   const addSignal = useCallback((signal: Omit<AlgoSignal, 'id' | 'timestamp'>) => {
-    setSignals(prev => [{ ...signal, id: generateSignalId(), timestamp: Date.now() }, ...prev].slice(0, maxSignals));
+    const newSignal = { ...signal, id: generateSignalId(), timestamp: Date.now() };
+    setSignals(prev => [newSignal, ...prev].slice(0, maxSignals));
+    
+    // Trigger audio/notification alert based on signal type
+    const alertType: AlertType = signal.type as AlertType;
+    const isUrgent = signal.type === 'whale' && signal.value >= 500000; // Urgent for large whales
+    
+    alertManager.triggerAlert(
+      `TapeFlow: ${signal.type.toUpperCase()}`,
+      signal.message,
+      alertType,
+      { urgent: isUrgent }
+    );
   }, [generateSignalId, maxSignals]);
   
   // Whale detection via trade subscription + track volume per price for spoof detection
