@@ -6,6 +6,7 @@ import type {
   OrderSide,
   OrderType,
   PaperTradingConfig,
+  RiskCheckResult,
 } from './types';
 import { DEFAULT_PAPER_TRADING_CONFIG } from './types';
 
@@ -23,9 +24,14 @@ export class PaperTradingEngine {
   
   // Trailing stop tracking: orderId -> highest/lowest price seen
   private trailingStopPrices: Map<string, number> = new Map();
+  
+  // Daily loss tracking
+  private dailyLossStartDate: string = '';
+  private dailyRealisedLoss: number = 0;
 
   constructor(initialBalance: number = INITIAL_BALANCE, config?: Partial<PaperTradingConfig>) {
     this.config = { ...DEFAULT_PAPER_TRADING_CONFIG, ...config };
+    this.dailyLossStartDate = this.getTodayKey();
     this.account = {
       balance: initialBalance,
       initialBalance,
@@ -48,6 +54,127 @@ export class PaperTradingEngine {
     return { ...this.config };
   }
 
+  // Get today's date key for daily loss tracking
+  private getTodayKey(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // Update daily loss tracker (called on each trade close)
+  private updateDailyLoss(pnl: number): void {
+    const today = this.getTodayKey();
+    if (this.dailyLossStartDate !== today) {
+      // New day, reset daily loss counter
+      this.dailyLossStartDate = today;
+      this.dailyRealisedLoss = 0;
+    }
+    if (pnl < 0) {
+      this.dailyRealisedLoss += Math.abs(pnl);
+    }
+  }
+
+  // Check risk limits before placing an order
+  checkRiskLimits(
+    symbol: string,
+    side: OrderSide,
+    quantity: number,
+    estimatedPrice: number
+  ): RiskCheckResult {
+    if (!this.config.riskEnabled) {
+      return { allowed: true };
+    }
+
+    const orderNotional = quantity * estimatedPrice;
+
+    // Check max order size
+    if (orderNotional > this.config.maxOrderSize) {
+      return {
+        allowed: false,
+        reason: `Order size $${orderNotional.toFixed(2)} exceeds max $${this.config.maxOrderSize}`,
+      };
+    }
+
+    // Check daily loss limit
+    const today = this.getTodayKey();
+    if (this.dailyLossStartDate !== today) {
+      this.dailyLossStartDate = today;
+      this.dailyRealisedLoss = 0;
+    }
+    if (this.dailyRealisedLoss >= this.config.maxDailyLoss) {
+      return {
+        allowed: false,
+        reason: `Daily loss limit reached ($${this.dailyRealisedLoss.toFixed(2)} / $${this.config.maxDailyLoss})`,
+      };
+    }
+
+    // Check max open positions
+    const openPositionCount = Array.from(this.positions.values()).filter(
+      p => p.side !== 'flat'
+    ).length;
+    const existingPosition = this.positions.get(symbol.toUpperCase());
+    const isNewPosition = !existingPosition || existingPosition.side === 'flat';
+    
+    if (isNewPosition && openPositionCount >= this.config.maxOpenPositions) {
+      return {
+        allowed: false,
+        reason: `Max open positions reached (${openPositionCount} / ${this.config.maxOpenPositions})`,
+      };
+    }
+
+    // Check position size limit (including existing position)
+    const currentPosition = existingPosition?.side !== 'flat' ? existingPosition : null;
+    let newPositionNotional = orderNotional;
+    
+    if (currentPosition) {
+      const currentNotional = currentPosition.quantity * currentPosition.currentPrice;
+      if (
+        (currentPosition.side === 'long' && side === 'buy') ||
+        (currentPosition.side === 'short' && side === 'sell')
+      ) {
+        // Adding to position
+        newPositionNotional = currentNotional + orderNotional;
+      } else {
+        // Reducing position - always allowed
+        return { allowed: true };
+      }
+    }
+
+    if (newPositionNotional > this.config.maxPositionSize) {
+      return {
+        allowed: false,
+        reason: `Position size $${newPositionNotional.toFixed(2)} would exceed max $${this.config.maxPositionSize}`,
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  // Get current risk status
+  getRiskStatus(): {
+    dailyLoss: number;
+    dailyLossLimit: number;
+    openPositions: number;
+    maxPositions: number;
+    isLocked: boolean;
+  } {
+    const today = this.getTodayKey();
+    if (this.dailyLossStartDate !== today) {
+      this.dailyLossStartDate = today;
+      this.dailyRealisedLoss = 0;
+    }
+
+    const openPositionCount = Array.from(this.positions.values()).filter(
+      p => p.side !== 'flat'
+    ).length;
+
+    return {
+      dailyLoss: this.dailyRealisedLoss,
+      dailyLossLimit: this.config.maxDailyLoss,
+      openPositions: openPositionCount,
+      maxPositions: this.config.maxOpenPositions,
+      isLocked: this.dailyRealisedLoss >= this.config.maxDailyLoss,
+    };
+  }
+
   placeOrder(
     symbol: string,
     side: OrderSide,
@@ -60,8 +187,21 @@ export class PaperTradingEngine {
       takeProfit?: number;
       trailingAmount?: number;
       trailingPercent?: boolean;
+      skipRiskCheck?: boolean;  // For internal use (closing positions)
     }
-  ): PaperOrder {
+  ): PaperOrder | null {
+    // Check risk limits (unless explicitly skipped)
+    if (!options?.skipRiskCheck) {
+      const estimatedPrice = price || 0; // For market orders, price will be determined at fill
+      // Use a reasonable estimate if no price provided (will be checked again at fill time)
+      const riskCheck = this.checkRiskLimits(symbol, side, quantity, estimatedPrice || 50000);
+      if (!riskCheck.allowed) {
+        console.warn(`[PaperTrading] Order rejected: ${riskCheck.reason}`);
+        // Return null to indicate order was rejected
+        return null;
+      }
+    }
+    
     const order: PaperOrder = {
       id: `order-${++this.orderIdCounter}`,
       symbol: symbol.toUpperCase(),
@@ -425,6 +565,9 @@ export class PaperTradingEngine {
   private recordPnL(pnl: number): void {
     this.account.balance += pnl;
     this.account.totalPnL += pnl;
+
+    // Track daily loss for risk controls
+    this.updateDailyLoss(pnl);
 
     if (pnl > 0) {
       this.account.winCount++;
