@@ -368,8 +368,19 @@ export class FootprintLayer implements Layer {
     const idealRowHeight = numLevels > 0 ? availableHeight / Math.max(numLevels, 8) : minRowHeight;
     const rowHeight = Math.max(minRowHeight, Math.min(idealRowHeight, maxRowHeight));
     
-    // Use recent max volume for better dynamic range
-    const maxVol = Math.max(this.getRecentMaxVolume(), 0.001);
+    // BUG FIX: Calculate max volume WITHIN THIS CLUSTER for proper scaling
+    // This prevents bars from overflowing when one candle has much more volume than others
+    let clusterMaxVol = 0.001;
+    for (const [, vol] of cluster.priceLevels) {
+      const levelTotal = vol.bid + vol.ask;
+      if (levelTotal > clusterMaxVol) clusterMaxVol = levelTotal;
+    }
+    
+    // Also use recent global max for intensity coloring (but not bar width)
+    const globalMaxVol = Math.max(this.getRecentMaxVolume(), 0.001);
+    
+    // Maximum bar width is 95% of halfWidth to prevent overflow into adjacent candles
+    const MAX_BAR_WIDTH = halfWidth * 0.95;
 
     for (const [price, volumes] of cluster.priceLevels) {
       const y = rc.priceToY(price);
@@ -379,13 +390,16 @@ export class FootprintLayer implements Layer {
       // Skip if off-screen
       if (y < -rowHeight || y > canvasHeight + rowHeight) continue;
       
-      // Calculate heatmap intensity (0-1) with sqrt for better visual distribution
-      const rawIntensity = Math.min(totalVolume / maxVol, 1);
+      // Calculate heatmap intensity (0-1) using global max for consistent coloring across candles
+      const rawIntensity = Math.min(totalVolume / globalMaxVol, 1);
       const intensity = Math.sqrt(rawIntensity); // Sqrt makes low volumes more visible
       
-      // Dynamic bar widths based on volume
-      const bidWidth = maxVol > 0 ? (volumes.bid / maxVol) * halfWidth * 0.9 : 0;
-      const askWidth = maxVol > 0 ? (volumes.ask / maxVol) * halfWidth * 0.9 : 0;
+      // BUG FIX: Scale bar widths relative to THIS CLUSTER's max, clamped to MAX_BAR_WIDTH
+      // This ensures the largest bar in each candle fills ~95% and nothing overflows
+      const rawBidWidth = clusterMaxVol > 0 ? (volumes.bid / clusterMaxVol) * MAX_BAR_WIDTH : 0;
+      const rawAskWidth = clusterMaxVol > 0 ? (volumes.ask / clusterMaxVol) * MAX_BAR_WIDTH : 0;
+      const bidWidth = Math.min(rawBidWidth, MAX_BAR_WIDTH);
+      const askWidth = Math.min(rawAskWidth, MAX_BAR_WIDTH);
 
       // --- HEATMAP BACKGROUND ---
       // Background color intensity based on total volume at this level
@@ -408,14 +422,14 @@ export class FootprintLayer implements Layer {
       // --- BID/ASK VOLUME BARS ---
       // Bid (sell) volume - left side, red
       if (bidWidth > 0) {
-        const bidAlpha = 0.5 + (volumes.bid / maxVol) * 0.4;
+        const bidAlpha = 0.5 + (volumes.bid / globalMaxVol) * 0.4;
         ctx.fillStyle = `rgba(255, 69, 69, ${bidAlpha})`;
         ctx.fillRect(centerX - bidWidth, y - rowHeight / 2 + 1, bidWidth, rowHeight - 2);
       }
 
       // Ask (buy) volume - right side, green
       if (askWidth > 0) {
-        const askAlpha = 0.5 + (volumes.ask / maxVol) * 0.4;
+        const askAlpha = 0.5 + (volumes.ask / globalMaxVol) * 0.4;
         ctx.fillStyle = `rgba(0, 255, 65, ${askAlpha})`;
         ctx.fillRect(centerX, y - rowHeight / 2 + 1, askWidth, rowHeight - 2);
       }
@@ -446,7 +460,13 @@ export class FootprintLayer implements Layer {
         // Show labels for any level with volume (no threshold)
         // Only hide if text won't fit AND it's not significant
         const fitsInRow = textWidth < halfWidth * 1.8;
-        const isSignificant = totalVolume > maxVol * 0.05 || isPoc; // Lowered from 0.1 to 0.05
+        const isSignificant = totalVolume > clusterMaxVol * 0.05 || isPoc; // Use cluster max for significance
+        
+        // BUG FIX: Clip text rendering to column bounds to prevent overflow
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(centerX - halfWidth, y - rowHeight / 2, halfWidth * 2, rowHeight);
+        ctx.clip();
         
         if (fitsInRow && isSignificant) {
           ctx.textAlign = 'center';
@@ -469,7 +489,9 @@ export class FootprintLayer implements Layer {
           ctx.fillText(shortLabel, centerX, y);
         }
         
-        // Imbalance indicator
+        ctx.restore(); // Remove clipping
+        
+        // Imbalance indicator (outside clip region so it's always visible)
         const imbalanceRatio = totalVolume > 0 ? Math.abs(delta) / totalVolume : 0;
         if (imbalanceRatio > 0.6) {
           // Strong imbalance - show arrow indicator

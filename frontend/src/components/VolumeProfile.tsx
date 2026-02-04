@@ -47,7 +47,7 @@ function formatPrice(price: number): string {
 // Volume bar component
 function VolumeBar({ 
   level, 
-  maxVolume,
+  pocVolume,
   poc,
   vah,
   val,
@@ -56,7 +56,7 @@ function VolumeBar({
   isLvn,
 }: { 
   level: VolumeLevel;
-  maxVolume: number;
+  pocVolume: number;
   poc: number;
   vah: number;
   val: number;
@@ -64,9 +64,17 @@ function VolumeBar({
   isHvn: boolean;
   isLvn: boolean;
 }) {
-  const totalWidth = (level.volume / maxVolume) * 100;
-  const buyWidth = (level.buyVolume / maxVolume) * 100;
-  const sellWidth = (level.sellVolume / maxVolume) * 100;
+  // Scale relative to POC volume (not max) for better visibility of smaller bars
+  // POC bar will be 100%, other bars proportional
+  const scale = pocVolume > 0 ? level.volume / pocVolume : 0;
+  // Clamp to 100% max (POC itself) and ensure minimum 2px visible bar
+  const totalWidth = Math.min(scale * 100, 100);
+  const buyScale = pocVolume > 0 ? level.buyVolume / pocVolume : 0;
+  const sellScale = pocVolume > 0 ? level.sellVolume / pocVolume : 0;
+  const buyWidth = Math.min(buyScale * 100, 100);
+  const sellWidth = Math.min(sellScale * 100, 100);
+  // Ensure minimum width for visible bars (at least 2%)
+  const minBarWidth = level.volume > 0 ? Math.max(totalWidth, 2) : 0;
   
   const isPoc = Math.abs(level.price - poc) < 0.01;
   const isVah = Math.abs(level.price - vah) < 0.01;
@@ -102,21 +110,21 @@ function VolumeBar({
       
       {/* Volume bar */}
       <div className="flex-1 h-3 bg-gray-900 rounded-sm overflow-hidden relative">
-        {/* Sell volume (red, left side) */}
+        {/* Sell volume (red, left side) - use max(2%, calculated) for visibility */}
         <div 
           className="absolute left-0 h-full bg-[#FF4545]/60 transition-all duration-150"
-          style={{ width: `${sellWidth}%` }}
+          style={{ width: `${level.sellVolume > 0 ? Math.max(sellWidth, 2) : 0}%` }}
         />
-        {/* Buy volume (green, overlaid) */}
+        {/* Buy volume (green, overlaid) - use max(2%, calculated) for visibility */}
         <div 
           className="absolute left-0 h-full bg-[#00FF41]/60 transition-all duration-150"
-          style={{ width: `${buyWidth}%` }}
+          style={{ width: `${level.buyVolume > 0 ? Math.max(buyWidth, 2) : 0}%` }}
         />
         {/* Total outline if POC */}
         {isPoc && (
           <div 
             className="absolute left-0 h-full border border-yellow-400/50 rounded-sm"
-            style={{ width: `${totalWidth}%` }}
+            style={{ width: `${minBarWidth}%` }}
           />
         )}
       </div>
@@ -223,8 +231,10 @@ export const VolumeProfile = memo(function VolumeProfile({
     return profile.lvnLevels.some((p: number) => Math.abs(p - price) < 0.01);
   }, [profile]);
   
-  // Get max volume for scaling
-  const maxVolume = profile?.nodes.reduce((max: number, l: VolumeNode) => Math.max(max, l.totalVolume), 0) || 1;
+  // Get POC volume for scaling (bar at POC will be 100% width)
+  const pocVolume = profile?.nodes.find((n: VolumeNode) => 
+    Math.abs(n.price - (profile?.poc || 0)) < 0.01
+  )?.totalVolume || profile?.nodes.reduce((max: number, l: VolumeNode) => Math.max(max, l.totalVolume), 0) || 1;
   
   // Convert nodes to display levels - show more rows for better distribution
   const displayLevels: VolumeLevel[] = (profile?.nodes || [])
@@ -307,7 +317,7 @@ export const VolumeProfile = memo(function VolumeProfile({
               <VolumeBar
                 key={level.price}
                 level={level}
-                maxVolume={maxVolume}
+                pocVolume={pocVolume}
                 poc={profile!.poc}
                 vah={profile!.vah}
                 val={profile!.val}

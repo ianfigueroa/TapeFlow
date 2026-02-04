@@ -247,6 +247,14 @@ export const DOMLadder = memo(function DOMLadder({
   const ladder = useMemo(() => {
     if (!orderBook || currentPrice === 0) return [];
     
+    // Debug: log order book data to verify bids are populated
+    if (orderBook.bids.length === 0) {
+      console.warn('[DOMLadder] No bids in order book for', symbol);
+    }
+    if (orderBook.asks.length === 0) {
+      console.warn('[DOMLadder] No asks in order book for', symbol);
+    }
+    
     // Determine tick size - use manual setting if set, otherwise auto-detect
     // IMPORTANT: tick size must match display precision to avoid duplicate-looking rows
     let actualTickSize = tickSize;
@@ -278,14 +286,23 @@ export const DOMLadder = memo(function DOMLadder({
       return rounded.toFixed(decimals);
     };
     
-    orderBook.bids.forEach(level => {
-      const key = roundToTick(level.price);
-      bidMap.set(key, (bidMap.get(key) || 0) + level.size);
+    // BUG FIX: Ensure we're iterating all bids correctly
+    // Bids should be sorted descending (highest first, closest to current price)
+    const sortedBids = [...orderBook.bids].sort((a, b) => b.price - a.price);
+    sortedBids.forEach(level => {
+      if (level.size > 0) { // Only include non-zero sizes
+        const key = roundToTick(level.price);
+        bidMap.set(key, (bidMap.get(key) || 0) + level.size);
+      }
     });
     
-    orderBook.asks.forEach(level => {
-      const key = roundToTick(level.price);
-      askMap.set(key, (askMap.get(key) || 0) + level.size);
+    // Asks should be sorted ascending (lowest first, closest to current price)
+    const sortedAsks = [...orderBook.asks].sort((a, b) => a.price - b.price);
+    sortedAsks.forEach(level => {
+      if (level.size > 0) { // Only include non-zero sizes
+        const key = roundToTick(level.price);
+        askMap.set(key, (askMap.get(key) || 0) + level.size);
+      }
     });
     
     // Build ladder array
