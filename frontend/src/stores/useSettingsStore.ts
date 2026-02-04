@@ -44,6 +44,11 @@ export interface VisualizationSettings {
   showHeatmap: boolean;    // Order book depth heatmap
   showFootprint: boolean;  // Footprint cluster chart
   chartHeight: number;  // pixels
+  // Alert settings
+  enableSoundAlerts: boolean;
+  enableDesktopNotifications: boolean;
+  alertCooldownSeconds: number;
+  alertVolume: number;  // 0-1 for sound volume
 }
 
 // Named theme profiles
@@ -106,6 +111,11 @@ const defaultVisualization: VisualizationSettings = {
   showHeatmap: true,
   showFootprint: false,
   chartHeight: 200,
+  // Alert defaults
+  enableSoundAlerts: true,
+  enableDesktopNotifications: true,
+  alertCooldownSeconds: 10,
+  alertVolume: 0.5,
 };
 
 // Default grid layout - mimics the original bento-box CSS grid

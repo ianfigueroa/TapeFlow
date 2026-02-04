@@ -3,6 +3,24 @@
 import { useState } from 'react';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/useSettingsStore';
+import { usePaperTradingStore } from '../stores/usePaperTradingStore';
+
+// Types for tabs
+type TabId = 'colors' | 'display' | 'trading' | 'alerts' | 'hotkeys' | 'profiles';
+
+interface TabConfig {
+  id: TabId;
+  label: string;
+}
+
+const TABS: TabConfig[] = [
+  { id: 'colors', label: 'COLORS' },
+  { id: 'display', label: 'DISPLAY' },
+  { id: 'trading', label: 'TRADING' },
+  { id: 'alerts', label: 'ALERTS' },
+  { id: 'hotkeys', label: 'HOTKEYS' },
+  { id: 'profiles', label: 'PROFILES' },
+];
 
 interface ColorPickerProps {
   label: string;
@@ -60,12 +78,28 @@ function Toggle({ label, checked, onChange }: ToggleProps) {
   );
 }
 
+// Hotkey row for the hotkeys tab
+function HotkeyRow({ keys, description }: { keys: string[]; description: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-sm text-gray-400">{description}</span>
+      <div className="flex gap-1">
+        {keys.map((key, i) => (
+          <kbd key={i} className="px-2 py-0.5 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-300">
+            {key}
+          </kbd>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface SettingsPanelProps {
   onClose: () => void;
 }
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<'colors' | 'charts' | 'profiles'>('colors');
+  const [activeTab, setActiveTab] = useState<TabId>('colors');
   const [newProfileName, setNewProfileName] = useState('');
 
   const colors = useSettingsStore((state) => state.colors);
@@ -78,6 +112,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const saveProfile = useSettingsStore((state) => state.saveProfile);
   const loadProfile = useSettingsStore((state) => state.loadProfile);
   const deleteProfile = useSettingsStore((state) => state.deleteProfile);
+
+  // Paper trading settings
+  const paperSettings = usePaperTradingStore((state) => ({
+    startingBalance: state.balance,
+    slippageBps: state.settings?.slippageBps || 5,
+    feeBps: state.settings?.feeBps || 4,
+  }));
+  const updatePaperSettings = usePaperTradingStore((state) => state.updateSettings);
+  const resetPaperTrading = usePaperTradingStore((state) => state.reset);
 
   return (
     <div className="bg-black rounded-xl border border-gray-800 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
@@ -94,19 +137,19 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </button>
         </div>
 
-        <div className="flex gap-2 mt-4">
-          {(['colors', 'charts', 'profiles'] as const).map((tab) => (
+        <div className="flex flex-wrap gap-2 mt-4">
+          {TABS.map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "px-3 py-1.5 rounded text-sm font-mono transition-colors",
-                activeTab === tab
+                "px-3 py-1.5 rounded text-xs font-mono transition-colors",
+                activeTab === tab.id
                   ? "bg-[#00FF41] text-black"
                   : "bg-gray-800 text-gray-400 hover:text-white"
               )}
             >
-              {tab.toUpperCase()}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -195,7 +238,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           </>
         )}
 
-        {activeTab === 'charts' && (
+        {activeTab === 'display' && (
           <div className="space-y-4">
             <h3 className="text-sm font-mono text-gray-500 uppercase">Visualization Panels</h3>
             <Toggle
@@ -240,6 +283,175 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
               />
             </div>
+          </div>
+        )}
+
+        {activeTab === 'trading' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-mono text-gray-500 uppercase">Paper Trading Settings</h3>
+            
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-300">Slippage (bps)</span>
+              <input
+                type="number"
+                value={paperSettings.slippageBps}
+                onChange={(e) => updatePaperSettings?.({ slippageBps: parseInt(e.target.value) || 5 })}
+                min={0}
+                max={100}
+                className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-300">Trading Fee (bps)</span>
+              <input
+                type="number"
+                value={paperSettings.feeBps}
+                onChange={(e) => updatePaperSettings?.({ feeBps: parseInt(e.target.value) || 4 })}
+                min={0}
+                max={50}
+                className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+              />
+            </div>
+
+            <div className="pt-4 border-t border-gray-800">
+              <h4 className="text-sm font-mono text-gray-500 uppercase mb-3">Risk Controls</h4>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Max Position Size ($)</span>
+                  <input
+                    type="number"
+                    defaultValue={100000}
+                    min={1000}
+                    className="w-24 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Daily Loss Limit ($)</span>
+                  <input
+                    type="number"
+                    defaultValue={5000}
+                    min={100}
+                    className="w-24 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-300">Max Open Positions</span>
+                  <input
+                    type="number"
+                    defaultValue={5}
+                    min={1}
+                    max={20}
+                    className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => resetPaperTrading?.()}
+              className="w-full py-2 bg-red-900/50 hover:bg-red-900 rounded text-sm text-red-400 transition-colors"
+            >
+              Reset Paper Trading Account
+            </button>
+          </div>
+        )}
+
+        {activeTab === 'alerts' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-mono text-gray-500 uppercase">Alert Settings</h3>
+            
+            <div className="space-y-3">
+              <Toggle
+                label="Enable Sound Alerts"
+                checked={visualization.enableSoundAlerts}
+                onChange={() => updateVisualization({ enableSoundAlerts: !visualization.enableSoundAlerts })}
+              />
+              <Toggle
+                label="Enable Desktop Notifications"
+                checked={visualization.enableDesktopNotifications}
+                onChange={() => updateVisualization({ enableDesktopNotifications: !visualization.enableDesktopNotifications })}
+              />
+              <Toggle
+                label="Enable Visual Highlights"
+                checked={true}
+                onChange={() => {}}
+              />
+            </div>
+            
+            <div className="pt-4 border-t border-gray-800">
+              <h4 className="text-sm font-mono text-gray-500 uppercase mb-3">Default Cooldowns</h4>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-300">Alert Cooldown (seconds)</span>
+                <input
+                  type="number"
+                  value={visualization.alertCooldownSeconds}
+                  onChange={(e) => updateVisualization({ alertCooldownSeconds: Math.max(1, Math.min(300, parseInt(e.target.value) || 5)) })}
+                  min={1}
+                  max={300}
+                  className="w-20 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300"
+                />
+              </div>
+            </div>
+            
+            <div className="pt-4 border-t border-gray-800">
+              <h4 className="text-sm font-mono text-gray-500 uppercase mb-3">Quick Alert Presets</h4>
+              <div className="space-y-2 text-sm text-gray-400">
+                <div className="flex items-center justify-between p-2 bg-gray-900 rounded">
+                  <span>Whale Trade (&gt;$50K)</span>
+                  <span className="text-[#00FF41]">Active</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-900 rounded">
+                  <span>Price Break (1% move)</span>
+                  <span className="text-[#00FF41]">Active</span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-900 rounded">
+                  <span>High OPS (&gt;100/s)</span>
+                  <span className="text-gray-600">Inactive</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 mt-2">
+                Configure custom alerts in the Alerts Panel
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'hotkeys' && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-mono text-gray-500 uppercase">Keyboard Shortcuts</h3>
+            
+            <div className="space-y-1">
+              <h4 className="text-xs text-gray-500 uppercase mt-3 mb-2">Navigation</h4>
+              <HotkeyRow keys={['?']} description="Show keyboard shortcuts" />
+              <HotkeyRow keys={['S']} description="Focus symbol search" />
+              <HotkeyRow keys={['Esc']} description="Close dialogs / Unfocus" />
+              
+              <h4 className="text-xs text-gray-500 uppercase mt-4 mb-2">Trading</h4>
+              <HotkeyRow keys={['B']} description="Quick buy at market" />
+              <HotkeyRow keys={['N']} description="Quick sell at market" />
+              <HotkeyRow keys={['F']} description="Flatten position" />
+              <HotkeyRow keys={['C']} description="Cancel all orders" />
+              
+              <h4 className="text-xs text-gray-500 uppercase mt-4 mb-2">View</h4>
+              <HotkeyRow keys={['1']} description="Toggle Time & Sales" />
+              <HotkeyRow keys={['2']} description="Toggle Chart" />
+              <HotkeyRow keys={['3']} description="Toggle Order Book" />
+              <HotkeyRow keys={['Space']} description="Pause/Resume tape scroll" />
+              
+              <h4 className="text-xs text-gray-500 uppercase mt-4 mb-2">Zoom</h4>
+              <HotkeyRow keys={['+']} description="Zoom in chart" />
+              <HotkeyRow keys={['-']} description="Zoom out chart" />
+              <HotkeyRow keys={['0']} description="Reset zoom" />
+            </div>
+            
+            <p className="text-xs text-gray-600 mt-4">
+              Press <kbd className="px-1 bg-gray-800 rounded">?</kbd> anywhere to see the full shortcuts panel
+            </p>
           </div>
         )}
 
