@@ -135,11 +135,80 @@ function buildCandles(
 export function ChartPanel({ trades: externalTrades, symbol, width = 600, className = '', compact: _compact = false }: ChartPanelProps) {
   const visualization = useSettingsStore((state) => state.visualization);
   const [bufferTrades, setBufferTrades] = useState<TradeWithAnalytics[]>([]);
+  const [historicalCandles, setHistoricalCandles] = useState<CandleDataPoint[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [autoScaleKey, setAutoScaleKey] = useState(0);
   const [selectedInterval, setSelectedInterval] = useState<TimeInterval>(TIME_INTERVALS[0]); // Default 15s
   const [chartView, setChartView] = useState<ChartView>('candlestick');
   const [visibleCandles, setVisibleCandles] = useState(100); // Zoom level
   const candleHistoryRef = useRef<CandleDataPoint[]>([]);
+  const lastFetchedSymbolRef = useRef<string>('');
+  const lastFetchedIntervalRef = useRef<number>(0);
+  
+  // Fetch historical klines from Binance on symbol/interval change
+  useEffect(() => {
+    if (!symbol) return;
+    
+    // Map our intervals to Binance kline intervals
+    const binanceIntervalMap: Record<number, string> = {
+      15000: '15s',   // 15 seconds - NOTE: Binance doesn't support 15s, use 1m and interpolate
+      60000: '1m',
+      300000: '5m',
+      900000: '15m',
+      3600000: '1h',
+      14400000: '4h',
+    };
+    
+    // For 15s, fetch 1m and we'll build from trades
+    // For other intervals, fetch directly
+    const fetchInterval = selectedInterval.value < 60000 ? 60000 : selectedInterval.value;
+    const binanceInterval = binanceIntervalMap[fetchInterval] || '1m';
+    
+    // Skip if we already fetched for this symbol/interval
+    if (lastFetchedSymbolRef.current === symbol && lastFetchedIntervalRef.current === selectedInterval.value) {
+      return;
+    }
+    
+    const fetchKlines = async () => {
+      setIsLoadingHistory(true);
+      try {
+        // Fetch 200 candles of history from Binance
+        const response = await fetch(
+          `https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${binanceInterval}&limit=200`
+        );
+        
+        if (!response.ok) {
+          console.warn('[ChartPanel] Failed to fetch historical klines:', response.status);
+          return;
+        }
+        
+        const data = await response.json();
+        
+        // Convert Binance kline format to our CandleDataPoint format
+        // Binance format: [openTime, open, high, low, close, volume, closeTime, ...]
+        const candles: CandleDataPoint[] = data.map((k: any[]) => ({
+          timestamp: k[0], // Open time
+          open: parseFloat(k[1]),
+          high: parseFloat(k[2]),
+          low: parseFloat(k[3]),
+          close: parseFloat(k[4]),
+          volume: parseFloat(k[5]),
+          vwap: (parseFloat(k[2]) + parseFloat(k[3]) + parseFloat(k[4])) / 3, // Approximate VWAP as HLC/3
+        }));
+        
+        setHistoricalCandles(candles);
+        lastFetchedSymbolRef.current = symbol;
+        lastFetchedIntervalRef.current = selectedInterval.value;
+        console.log(`[ChartPanel] Loaded ${candles.length} historical candles for ${symbol} @ ${binanceInterval}`);
+      } catch (e) {
+        console.warn('[ChartPanel] Error fetching historical klines:', e);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+    
+    fetchKlines();
+  }, [symbol, selectedInterval.value]);
   
   // Auto-scale handler - forces a re-render with fresh bounds
   const handleAutoScale = useCallback(() => {
@@ -185,22 +254,40 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
   // Use buffer trades if available (from TapeTable's processing), otherwise use external
   const trades = symbol && bufferTrades.length > 0 ? bufferTrades : externalTrades;
 
-  // Build candlestick data from trades
+  // Build candlestick data from trades, merged with historical backfill
   const candleData = useMemo(() => {
-    if (trades.length === 0) return candleHistoryRef.current;
+    // Build candles from real-time trades
+    const realtimeCandles = trades.length > 0 ? buildCandles(trades, selectedInterval.value) : [];
     
-    // Build ALL candles from available trades (don't limit here)
-    const rawCandles = buildCandles(trades, selectedInterval.value);
+    // Merge historical candles with real-time
+    // Historical candles are at the selected interval or closest match
+    let mergedCandles: CandleDataPoint[] = [];
+    
+    if (historicalCandles.length > 0) {
+      // For intervals < 1m, we don't have direct historical data, use what we have
+      // For intervals >= 1m, historical candles are already at the right interval
+      const historicalEndTime = historicalCandles.length > 0 
+        ? historicalCandles[historicalCandles.length - 1].timestamp 
+        : 0;
+      
+      // Filter real-time candles that are after historical data to avoid duplicates
+      const newRealtimeCandles = realtimeCandles.filter(c => c.timestamp > historicalEndTime);
+      
+      // Merge: historical first, then new real-time
+      mergedCandles = [...historicalCandles, ...newRealtimeCandles];
+    } else {
+      mergedCandles = realtimeCandles;
+    }
     
     // Apply Heikin-Ashi transformation if selected
-    const allCandles = chartView === 'heikin-ashi' ? toHeikinAshi(rawCandles) : rawCandles;
+    const allCandles = chartView === 'heikin-ashi' ? toHeikinAshi(mergedCandles) : mergedCandles;
     
     // Store full history
     candleHistoryRef.current = allCandles;
     
     // Slice by visibleCandles for zoom (this is where zoom takes effect)
     return allCandles.slice(-visibleCandles);
-  }, [trades, selectedInterval.value, chartView, visibleCandles]);
+  }, [trades, historicalCandles, selectedInterval.value, chartView, visibleCandles]);
 
   // Also keep legacy price data for fallback/transition
   const priceData = useMemo(() => {
