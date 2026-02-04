@@ -242,6 +242,9 @@ export class PaperTradingEngine {
       stopLoss,
       takeProfit,
     });
+    if (!order) {
+      throw new Error('Failed to place bracket order: risk limits exceeded');
+    }
     return order;
   }
 
@@ -398,16 +401,20 @@ export class PaperTradingEngine {
         const slOrder = this.placeOrder(symbol, slSide, 'stop', position.quantity, undefined, {
           stopPrice: order.stopLoss,
         });
-        slOrder.parentOrderId = order.id;
-        childIds.push(slOrder.id);
+        if (slOrder) {
+          slOrder.parentOrderId = order.id;
+          childIds.push(slOrder.id);
+        }
       }
 
       // Create TP order if set
       if (order.takeProfit) {
         const tpSide: OrderSide = position.side === 'long' ? 'sell' : 'buy';
         const tpOrder = this.placeOrder(symbol, tpSide, 'limit', position.quantity, order.takeProfit);
-        tpOrder.parentOrderId = order.id;
-        childIds.push(tpOrder.id);
+        if (tpOrder) {
+          tpOrder.parentOrderId = order.id;
+          childIds.push(tpOrder.id);
+        }
       }
 
       order.childOrderIds = childIds;

@@ -262,7 +262,7 @@ export function TapeFlowWorkspace({ symbolData, pauseScroll }: TapeFlowWorkspace
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [newLayoutName, setNewLayoutName] = useState('');
   const layoutRef = useRef<Layout>(null);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
   const modelRef = useRef<Model | null>(null); // Track model for cleanup save
   
   // Calculate current price for liquidation heatmap

@@ -136,7 +136,6 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
   const visualization = useSettingsStore((state) => state.visualization);
   const [bufferTrades, setBufferTrades] = useState<TradeWithAnalytics[]>([]);
   const [historicalCandles, setHistoricalCandles] = useState<CandleDataPoint[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [autoScaleKey, setAutoScaleKey] = useState(0);
   const [selectedInterval, setSelectedInterval] = useState<TimeInterval>(TIME_INTERVALS[0]); // Default 15s
   const [chartView, setChartView] = useState<ChartView>('candlestick');
@@ -170,7 +169,6 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
     }
     
     const fetchKlines = async () => {
-      setIsLoadingHistory(true);
       try {
         // Fetch 200 candles of history from Binance
         const response = await fetch(
@@ -202,8 +200,6 @@ export function ChartPanel({ trades: externalTrades, symbol, width = 600, classN
         console.log(`[ChartPanel] Loaded ${candles.length} historical candles for ${symbol} @ ${binanceInterval}`);
       } catch (e) {
         console.warn('[ChartPanel] Error fetching historical klines:', e);
-      } finally {
-        setIsLoadingHistory(false);
       }
     };
     
