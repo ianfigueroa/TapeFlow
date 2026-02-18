@@ -39,8 +39,8 @@ const LEVERAGE_LEVELS = [5, 10, 25, 50, 100];
 // Polling interval (10 seconds as specified in requirements)
 const DEFAULT_REFRESH_INTERVAL_MS = 10000;
 
-// Binance Futures API for Open Interest (proxy for liquidation potential)
-const FUTURES_API_BASE = 'https://fapi.binance.com/fapi/v1';
+// Backend proxy for Binance Futures API (avoids CORS issues)
+const FUTURES_API_BASE = '/api/binance';
 
 // Hydration state
 type HydrationState = 'loading' | 'polling' | 'estimated' | 'error';
@@ -72,7 +72,7 @@ async function fetchOpenInterestData(symbol: string): Promise<{ longShortRatio: 
     
     // Fetch long/short ratio for better liquidation estimation
     const [ratioRes, oiRes] = await Promise.all([
-      fetch(`${FUTURES_API_BASE}/globalLongShortAccountRatio?symbol=${normalizedSymbol}&period=5m&limit=1`),
+      fetch(`${FUTURES_API_BASE}/longShortRatio?symbol=${normalizedSymbol}&period=5m&limit=1`),
       fetch(`${FUTURES_API_BASE}/openInterest?symbol=${normalizedSymbol}`)
     ]);
     

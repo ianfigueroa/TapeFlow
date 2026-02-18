@@ -369,6 +369,56 @@ app.get('/api/news-stats', (req, res) => {
   });
 });
 
+// Binance Futures API proxy endpoints
+// These proxy requests to avoid CORS issues when fetching from the frontend
+const BINANCE_FUTURES_API = 'https://fapi.binance.com/fapi/v1';
+
+app.get('/api/binance/openInterest', async (req, res) => {
+  try {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol is required' });
+    }
+    const response = await fetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${symbol}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch open interest' });
+  }
+});
+
+app.get('/api/binance/longShortRatio', async (req, res) => {
+  try {
+    const symbol = req.query.symbol as string;
+    const period = req.query.period as string || '5m';
+    const limit = req.query.limit as string || '1';
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol is required' });
+    }
+    const response = await fetch(
+      `${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=${limit}`
+    );
+    const data = await response.json();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch long/short ratio' });
+  }
+});
+
+app.get('/api/binance/premiumIndex', async (req, res) => {
+  try {
+    const symbol = req.query.symbol as string;
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol is required' });
+    }
+    const response = await fetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${symbol}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch premium index' });
+  }
+});
+
 // Wire up news broadcaster to WebSocket
 newsAdapter.onNews((item) => {
   const message: ServerMessage = {
