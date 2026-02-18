@@ -58,25 +58,27 @@ class TitanService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private metricsCallbacks: Set<MetricsCallback> = new Set();
   private alertCallbacks: Set<AlertCallback> = new Set();
+  private manuallyDisconnected = false;
   private connectionCallbacks: Set<ConnectionCallback> = new Set();
   private state: TitanConnectionState = {
     isConnected: false,
     error: null,
     lastMetrics: null,
     alerts: [],
+
   };
 
   /**
    * Connect to Titan.cpp WebSocket server
    */
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if ((this.ws?.readyState === WebSocket.OPEN) || (this.ws?.readyState === WebSocket.CONNECTING)) {
       console.log('[Titan] Already connected');
       return;
+      
     }
-
-    this.cleanup();
-    this.reconnectAttempts = 0;  // Reset reconnect counter for fresh connection
+    this.manuallyDisconnected = false;
+    if (this.ws) this.cleanup();
 
     try {
       console.log(`[Titan] Connecting to ${TITAN_WS_URL}...`);
@@ -102,7 +104,9 @@ class TitanService {
         console.log(`[Titan] Disconnected (code: ${event.code})`);
         this.state = { ...this.state, isConnected: false };
         this.notifyConnection(false, event.reason || undefined);
-        this.scheduleReconnect();
+        if (!this.manuallyDisconnected){
+          this.scheduleReconnect();
+        }
       };
     } catch (error) {
       console.error('[Titan] Failed to connect:', error);
@@ -117,7 +121,8 @@ class TitanService {
    */
   disconnect(): void {
     console.log('[Titan] Disconnecting...');
-    this.reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Prevent auto-reconnect
+    this.manuallyDisconnected = true;
+    // this.reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Dont need it but leave js in case
     this.cleanup();
     this.state = {
       isConnected: false,
@@ -127,6 +132,7 @@ class TitanService {
     };
     this.notifyConnection(false);
   }
+  
 
   /**
    * Subscribe to metrics updates
@@ -258,17 +264,26 @@ class TitanService {
   }
 
   private scheduleReconnect(): void {
+     if (this.reconnectTimer) return; //PREVENETS DUPLICATE TIMERS
+      if (this.manuallyDisconnected) return; // Do not schedule reconnect if manually disconnected
+    
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       console.log('[Titan] Max reconnect attempts reached');
       this.state = { ...this.state, error: 'Max reconnect attempts reached' };
       return;
     }
+  
 
-    const delay = RECONNECT_DELAY_BASE * Math.pow(2, this.reconnectAttempts);
+    const delay = Math.min( 
+    RECONNECT_DELAY_BASE * Math.pow(2, this.reconnectAttempts), 30000 //30 sec cap 
+    );
+    
     console.log(`[Titan] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
     this.reconnectAttempts++;
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.state = { ...this.state, error: null }; // Clear previous error
       this.connect();
     }, delay);
   }
