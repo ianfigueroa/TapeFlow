@@ -3,6 +3,7 @@ import { DashboardLayout } from './components/DashboardLayout';
 import { ThemeProvider } from './hooks/useTheme';
 import { alertManager } from './utils/AlertManager';
 import { useSettingsStore } from './stores/useSettingsStore';
+import { useMarketStore } from './stores/useMarketStore';
 
 function App() {
   // Request notification permission on mount if enabled in settings
@@ -15,6 +16,17 @@ function App() {
         }
       });
     }
+  }, []);
+
+  // Connect to Titan.cpp WebSocket server for pre-calculated analytics
+  useEffect(() => {
+    const { connectTitan, disconnectTitan } = useMarketStore.getState();
+    console.log('[TapeFlow] Connecting to Titan.cpp engine...');
+    connectTitan();
+
+    return () => {
+      disconnectTitan();
+    };
   }, []);
 
   return (

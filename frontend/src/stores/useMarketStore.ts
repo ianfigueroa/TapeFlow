@@ -16,6 +16,13 @@ import {
 } from '../types';
 import { enrichTradeWithAnalytics, resetAnalytics } from '../utils/calculations';
 import { pushTrade, pushOrderBook, pushTicker, pushToCombinedBuffer } from '../services/dataBuffer';
+import { titanService, TitanMetrics, TitanAlert } from '../services/titanService';
+
+// Titan.cpp alert with timestamp for display
+export interface TitanAlertWithTimestamp extends TitanAlert {
+  timestamp: number;
+  id: string;
+}
 
 interface MarketStore {
   // Connection
@@ -23,17 +30,23 @@ interface MarketStore {
   connectionError: string | null;
   reconnectAttempts: number;
   ws: WebSocket | null;
-  
+
+  // Titan.cpp connection state
+  titanConnected: boolean;
+  titanError: string | null;
+  titanMetrics: TitanMetrics | null;
+  titanAlerts: TitanAlertWithTimestamp[];
+
   // Market data
   symbols: Map<string, SymbolState>;
   activeSymbols: string[];
   selectedSymbol: string | null;
   tabs: TabData[];
   combinedTrades: TradeWithAnalytics[];
-  
+
   // Settings
   settings: LayoutSettings;
-  
+
   // Actions
   connect: () => void;
   disconnect: () => void;
@@ -45,12 +58,17 @@ interface MarketStore {
   removeTab: (symbol: string) => void;
   updateSettings: (settings: Partial<LayoutSettings>) => void;
   clearTrades: (symbol?: string) => void;
-  
+
+  // Titan.cpp actions
+  connectTitan: () => void;
+  disconnectTitan: () => void;
+
   // Internal
   _handleMessage: (event: MessageEvent) => void;
   _handleTrade: (trade: Trade) => void;
   _handleOrderBook: (orderBook: OrderBook) => void;
   _reconnect: () => void;
+  _titanUnsubscribers: Array<() => void>;
 }
 
 // Config
@@ -59,6 +77,9 @@ const MAX_TRADES = 500;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY = 1000;
 
+// Counter for generating unique Titan alert IDs
+let titanAlertIdCounter = 0;
+
 export const useMarketStore = create<MarketStore>()(
   subscribeWithSelector((set, get) => ({
     // Initial state
@@ -66,6 +87,14 @@ export const useMarketStore = create<MarketStore>()(
     connectionError: null,
     reconnectAttempts: 0,
     ws: null,
+
+    // Titan.cpp initial state
+    titanConnected: false,
+    titanError: null,
+    titanMetrics: null,
+    titanAlerts: [],
+    _titanUnsubscribers: [],
+
     symbols: new Map(),
     activeSymbols: [],
     selectedSymbol: null,
@@ -474,7 +503,67 @@ export const useMarketStore = create<MarketStore>()(
       const { settings } = get();
       set({ settings: { ...settings, ...newSettings } });
     },
-    
+
+    /**
+     * Connect to Titan.cpp WebSocket server for pre-calculated analytics
+     */
+    connectTitan: () => {
+      // Clean up any existing subscriptions first
+      const { _titanUnsubscribers } = get();
+      _titanUnsubscribers.forEach(unsub => unsub());
+
+      // Subscribe to connection state changes
+      const unsubConnection = titanService.onConnectionChange((connected, error) => {
+        set({
+          titanConnected: connected,
+          titanError: error || null,
+        });
+      });
+
+      // Subscribe to metrics updates
+      const unsubMetrics = titanService.onMetrics((metrics) => {
+        set({ titanMetrics: metrics });
+      });
+
+      // Subscribe to whale alerts
+      const unsubAlert = titanService.onAlert((alert) => {
+        const alertWithMeta: TitanAlertWithTimestamp = {
+          ...alert,
+          timestamp: Date.now(),
+          id: `titan-${++titanAlertIdCounter}`,
+        };
+        const { titanAlerts } = get();
+        // Keep newest first, limit to 100
+        set({
+          titanAlerts: [alertWithMeta, ...titanAlerts].slice(0, 100),
+        });
+      });
+
+      // Store unsubscribers for cleanup
+      set({ _titanUnsubscribers: [unsubConnection, unsubMetrics, unsubAlert] });
+
+      // Initiate connection
+      titanService.connect();
+    },
+
+    /**
+     * Disconnect from Titan.cpp
+     */
+    disconnectTitan: () => {
+      // Clean up subscriptions
+      const { _titanUnsubscribers } = get();
+      _titanUnsubscribers.forEach(unsub => unsub());
+
+      titanService.disconnect();
+      set({
+        _titanUnsubscribers: [],
+        titanConnected: false,
+        titanError: null,
+        titanMetrics: null,
+        titanAlerts: [],
+      });
+    },
+
     /**
      * Clear trade history (optionally for a specific symbol)
      */
@@ -537,3 +626,19 @@ export const useSettings = () =>
 
 export const useCombinedTrades = () =>
   useMarketStore((state) => state.combinedTrades);
+
+// ============================================================================
+// Titan.cpp Selector Hooks
+// ============================================================================
+
+export const useTitanConnected = () =>
+  useMarketStore((state) => state.titanConnected);
+
+export const useTitanError = () =>
+  useMarketStore((state) => state.titanError);
+
+export const useTitanMetrics = () =>
+  useMarketStore((state) => state.titanMetrics);
+
+export const useTitanAlerts = () =>
+  useMarketStore((state) => state.titanAlerts);

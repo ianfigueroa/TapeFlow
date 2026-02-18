@@ -14,6 +14,7 @@ import { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { cn } from '../lib/utils';
 import { subscribeToTrades, getTradeRate } from '../services/dataBuffer';
 import { LabelWithTooltip } from './Tooltip';
+import { useTitanMetrics, useTitanConnected } from '../stores/useMarketStore';
 import type { Trade } from '../types';
 
 interface SessionStatsProps {
@@ -142,7 +143,11 @@ export const SessionStats = memo(function SessionStats({
   const [isExpanded, setIsExpanded] = useState(true);
   const [session, setSession] = useState<SessionState | null>(null);
   const [tradeRate, setTradeRate] = useState({ current: 0, avg: 0 });
-  
+
+  // Titan.cpp pre-calculated analytics
+  const titanMetrics = useTitanMetrics();
+  const titanConnected = useTitanConnected();
+
   const sessionRef = useRef<SessionState | null>(null);
   const symbolRef = useRef<string>(symbol);
   
@@ -415,21 +420,79 @@ export const SessionStats = memo(function SessionStats({
             <div className="text-[9px] text-gray-600 uppercase mb-1">Trade Activity</div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
               <StatRow label="Trades" value={session.tradeCount.toLocaleString()} compact />
-              <StatRow 
-                label="Rate" 
+              <StatRow
+                label="Rate"
                 value={`${tradeRate.current}/s`}
                 valueClass={tradeRate.current > 50 ? "text-yellow-400" : tradeRate.current > 10 ? "text-orange-400" : "text-gray-400"}
-                compact 
+                compact
               />
             </div>
-            <StatRow 
-              label="Avg Rate" 
+            <StatRow
+              label="Avg Rate"
               value={`${tradeRate.avg.toFixed(1)}/s`}
               valueClass="text-gray-500"
-              compact 
+              compact
             />
           </div>
-          
+
+          {/* Titan.cpp Analytics */}
+          <div className="border-b border-gray-800/50 pb-2">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-[9px] text-gray-600 uppercase">
+                <LabelWithTooltip label="Titan Engine" term="Titan.cpp pre-calculated analytics with fixed-point precision" />
+              </div>
+              <span className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                titanConnected ? "bg-[#00FF41] animate-pulse" : "bg-gray-600"
+              )} />
+            </div>
+            {titanConnected && titanMetrics ? (
+              <>
+                <StatRow
+                  label="VWAP"
+                  value={formatPrice(titanMetrics.trade.vwap)}
+                  valueClass="text-cyan-400 font-bold"
+                  tooltip="Titan-calculated VWAP with fixed-point precision"
+                  compact
+                />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  <StatRow
+                    label="Imbalance"
+                    value={`${(titanMetrics.book.imbalance * 100).toFixed(0)}%`}
+                    valueClass={titanMetrics.book.imbalance > 0 ? "text-[#00FF41]" : titanMetrics.book.imbalance < 0 ? "text-[#FF4545]" : "text-gray-400"}
+                    tooltip="Order book imbalance (-100% to +100%)"
+                    compact
+                  />
+                  <StatRow
+                    label="Spread"
+                    value={`${titanMetrics.book.spreadBps.toFixed(2)} bps`}
+                    valueClass="text-gray-400"
+                    tooltip="Bid-ask spread in basis points"
+                    compact
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 pt-1 border-t border-gray-800/30">
+                  <StatRow
+                    label="Buy Vol"
+                    value={formatVolume(titanMetrics.trade.buyVolume)}
+                    valueClass="text-[#00FF41]"
+                    compact
+                  />
+                  <StatRow
+                    label="Sell Vol"
+                    value={formatVolume(titanMetrics.trade.sellVolume)}
+                    valueClass="text-[#FF4545]"
+                    compact
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="text-gray-600 text-[10px] py-1">
+                {titanConnected ? 'Waiting for data...' : 'Not connected - run titan.exe'}
+              </div>
+            )}
+          </div>
+
           {/* Largest Trades */}
           <div>
             <div className="text-[9px] text-gray-600 uppercase mb-1">Largest Trades</div>
