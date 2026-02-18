@@ -398,7 +398,33 @@ The Docker setup includes:
 
 TapeFlow uses [Titan.cpp](https://github.com/ianfigueroa/Titan) for high-performance market analytics. The Docker Compose setup automatically pulls the Titan image from GitHub Container Registry.
 
-To run Titan separately:
+**Data Flow with Titan:**
+```
+Binance Futures API
+        │
+        ▼
+┌───────────────────┐
+│    Titan.cpp      │  (C++ engine on port 9001)
+│  • VWAP           │
+│  • Imbalance      │
+│  • Whale Alerts   │
+└─────────┬─────────┘
+          │ ws://localhost:9001
+          ▼
+┌───────────────────┐
+│  TapeFlow Backend │  (Node.js on port 3001)
+│  • Merges Titan   │
+│    metrics with   │
+│    Binance data   │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ TapeFlow Frontend │  (React on port 5173)
+└───────────────────┘
+```
+
+**Running Titan manually:**
 ```bash
 # Using Docker
 docker pull ghcr.io/ianfigueroa/titan:latest
@@ -408,10 +434,20 @@ docker run -p 9001:9001 ghcr.io/ianfigueroa/titan
 # https://github.com/ianfigueroa/Titan/releases
 ```
 
-Titan provides:
+**Titan provides:**
 - Real-time VWAP with fixed-point precision
 - Order book imbalance calculation
-- Sigma-based whale trade alerts
+- Sigma-based whale trade alerts (default: 2σ threshold)
+- Spread in basis points
+
+**Connection status:**
+TapeFlow shows "Titan Connected" in the header when connected. If Titan is unavailable, TapeFlow falls back to its own analytics calculations.
+
+**Configuration:**
+Set the Titan URL via environment variable:
+```bash
+TITAN_WS_URL=ws://titan:9001 npm run dev
+```
 
 ### Binance API Proxy
 

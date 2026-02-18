@@ -129,6 +129,109 @@ TapeFlow is a real-time cryptocurrency market data visualization platform design
 
 ---
 
+## Titan Integration
+
+TapeFlow integrates with [Titan.cpp](https://github.com/ianfigueroa/Titan), a high-performance C++ market data engine that provides computed analytics.
+
+### Data Flow with Titan
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         EXTERNAL DATA SOURCES                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │                                                    │
+        │ Binance WebSocket                                  │ Binance WebSocket
+        ▼                                                    ▼
+┌───────────────────────────┐                    ┌───────────────────────────┐
+│      Titan.cpp            │                    │    TapeFlow Backend       │
+│     (Port 9001)           │                    │     (Port 3001)           │
+│                           │                    │                           │
+│  • Maintains order book   │                    │  • Trade normalization    │
+│  • Calculates VWAP        │                    │  • Open interest          │
+│  • Detects whale trades   │                    │  • Liquidation feed       │
+│  • Computes imbalance     │                    │  • News integration       │
+└───────────┬───────────────┘                    └───────────┬───────────────┘
+            │                                                │
+            │ ws://localhost:9001                            │ ws://localhost:3001
+            │ (metrics every 500ms)                          │ (trades in real-time)
+            └─────────────────────┬──────────────────────────┘
+                                  │
+                                  ▼
+                    ┌───────────────────────────┐
+                    │    TapeFlow Frontend      │
+                    │     (Port 5173)           │
+                    │                           │
+                    │  • Merges both feeds      │
+                    │  • Displays Titan VWAP    │
+                    │  • Shows whale alerts     │
+                    │  • Renders imbalance      │
+                    └───────────────────────────┘
+```
+
+### Titan Message Format
+
+**Metrics (every 500ms):**
+```json
+{
+  "type": "metrics",
+  "timestamp": "2025-02-18T20:38:23.000Z",
+  "book": {
+    "bestBid": 67542.20,
+    "bestAsk": 67542.30,
+    "spreadBps": 0.15,
+    "imbalance": 0.17
+  },
+  "trade": {
+    "vwap": 67542.30,
+    "buyVolume": 5.2,
+    "sellVolume": 3.1,
+    "tradeCount": 42
+  }
+}
+```
+
+**Whale Alerts (on detection):**
+```json
+{
+  "type": "alert",
+  "timestamp": "2025-02-18T20:38:42.188Z",
+  "side": "BUY",
+  "price": 67559.30,
+  "quantity": 0.318,
+  "sigma": 2.3
+}
+```
+
+### TitanService
+
+The frontend connects to Titan via `titanService.ts`:
+
+```typescript
+class TitanService {
+  // Connect to Titan WebSocket
+  connect(url: string): void;
+
+  // Subscribe to metrics updates
+  onMetrics(callback: (metrics: TitanMetrics) => void): () => void;
+
+  // Subscribe to whale alerts
+  onAlert(callback: (alert: WhaleAlert) => void): () => void;
+
+  // Connection state
+  isConnected: boolean;
+}
+```
+
+### Fallback Behavior
+
+When Titan is unavailable:
+1. TapeFlow shows "Titan Disconnected" in the UI
+2. Falls back to internal VWAP calculation (less precise)
+3. Whale detection uses simpler threshold-based logic
+4. Reconnection attempts every 5 seconds with exponential backoff
+
+---
+
 ## Data Flow
 
 ### Trade Data Flow

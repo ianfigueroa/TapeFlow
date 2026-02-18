@@ -4,7 +4,7 @@
  * Connects to the Titan.cpp market data engine for pre-calculated analytics:
  * - VWAP with fixed-point precision
  * - Order book imbalance
- * - Sigma-based whale trade alertsSD
+ * - Sigma-based whale trade alerts
  *
  * Titan runs as a separate process on port 9001, providing higher performance
  * and more accurate calculations than JavaScript-based processing.
@@ -122,7 +122,6 @@ class TitanService {
   disconnect(): void {
     console.log('[Titan] Disconnecting...');
     this.manuallyDisconnected = true;
-    // this.reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Dont need it but leave js in case
     this.cleanup();
     this.state = {
       isConnected: false,
@@ -264,7 +263,7 @@ class TitanService {
   }
 
   private scheduleReconnect(): void {
-     if (this.reconnectTimer) return; //PREVENETS DUPLICATE TIMERS
+     if (this.reconnectTimer) return; // Prevents duplicate timers
       if (this.manuallyDisconnected) return; // Do not schedule reconnect if manually disconnected
     
     if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
