@@ -5,9 +5,10 @@ import { cn } from '../lib/utils';
 import { subscribeToTrades, getCurrentOrderBook, getTradeRate, resetTradeRateTracker } from '../services/dataBuffer';
 import { formatPrice } from '../utils/formatters';
 import { alertManager, type AlertType } from '../utils/AlertManager';
+import { useTitanAlerts, useTitanConnected, type TitanAlertWithTimestamp } from '../stores/useMarketStore';
 import type { Trade } from '../types';
 
-type SignalType = 'whale' | 'velocity' | 'spoof' | 'wall' | 'imbalance';
+type SignalType = 'whale' | 'velocity' | 'spoof' | 'wall' | 'imbalance' | 'titan';
 
 interface AlgoSignal {
   id: string;
@@ -52,7 +53,11 @@ export const AlgoSignals = memo(function AlgoSignals({
   const [avgTradesPerSec, setAvgTradesPerSec] = useState(0);
   const [currentVelocityPct, setCurrentVelocityPct] = useState(0);
   const [isExpanded, setIsExpanded] = useState(true);
-  
+
+  // Titan.cpp whale alerts
+  const titanAlerts = useTitanAlerts();
+  const titanConnected = useTitanConnected();
+
   const currentSymbolRef = useRef<string>(symbol);
   const currentPriceRef = useRef<number>(0);
   const signalIdCounterRef = useRef(0);
@@ -282,6 +287,7 @@ export const AlgoSignals = memo(function AlgoSignals({
       case 'velocity': return "text-[#EAB308] font-bold";
       case 'spoof': return "text-[#A855F7] font-bold";
       case 'wall': return signal.side === 'buy' ? "text-cyan-400 font-bold" : "text-pink-400 font-bold";
+      case 'titan': return signal.side === 'buy' ? "text-[#00FF41] font-bold" : "text-[#FF4545] font-bold";
       default: return "text-gray-400";
     }
   };
@@ -293,10 +299,28 @@ export const AlgoSignals = memo(function AlgoSignals({
       spoof: { bg: 'bg-[#A855F7]/20', text: 'text-[#A855F7]', label: 'SPOOF' },
       wall: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', label: 'WALL' },
       imbalance: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'IMB' },
+      titan: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', label: 'TITAN' },
     };
     const s = styles[type] || { bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'INFO' };
     return <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${s.bg} ${s.text} border border-current/30`}>{s.label}</span>;
   };
+
+  // Convert Titan alerts to AlgoSignal format for unified display
+  const titanSignals: AlgoSignal[] = titanAlerts.map((alert: TitanAlertWithTimestamp) => ({
+    id: alert.id,
+    type: 'titan' as SignalType,
+    symbol: symbol, // Titan doesn't include symbol, assume current
+    message: `${alert.side} ${alert.quantity.toFixed(4)} @ ${formatPrice(alert.price, 'crypto')} (${alert.deviation.toFixed(1)}σ)`,
+    value: alert.price * alert.quantity,
+    side: alert.side === 'BUY' ? 'buy' : 'sell',
+    timestamp: alert.timestamp,
+    price: alert.price,
+  }));
+
+  // Merge and sort all signals by timestamp (newest first)
+  const allSignals = [...signals, ...titanSignals]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, maxSignals);
   
   return (
     <div className={cn("bg-black border border-gray-800 rounded-lg overflow-hidden flex flex-col", className)}>
@@ -304,7 +328,13 @@ export const AlgoSignals = memo(function AlgoSignals({
            onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex items-center gap-2">
           <span className="text-orange-500 font-bold text-sm font-mono">&gt;&gt; ALGO SIGNALS</span>
-          <span className="text-gray-600 text-xs font-mono">[{signals.length}]</span>
+          <span className="text-gray-600 text-xs font-mono">[{allSignals.length}]</span>
+          {titanConnected && (
+            <span className="flex items-center gap-1 text-[10px] text-cyan-500 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+              TITAN
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs">
           <span className="text-gray-500 font-mono">
@@ -333,11 +363,11 @@ export const AlgoSignals = memo(function AlgoSignals({
       
       {isExpanded && (
         <div className="flex-1 overflow-y-auto bg-black font-mono text-xs">
-          {signals.length === 0 ? (
+          {allSignals.length === 0 ? (
             <div className="px-3 py-4 text-center text-gray-700">&gt; Monitoring {symbol} for signals...</div>
           ) : (
             <div className="divide-y divide-gray-900/50">
-              {signals.filter(s => s.symbol.toUpperCase() === symbol.toUpperCase()).map(signal => (
+              {allSignals.filter(s => s.symbol.toUpperCase() === symbol.toUpperCase()).map(signal => (
                 <div key={signal.id} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-900/30">
                   <span className="text-gray-600 w-16 flex-none">{formatTimeShort(signal.timestamp)}</span>
                   <span className="flex-none">{getSignalBadge(signal.type)}</span>
