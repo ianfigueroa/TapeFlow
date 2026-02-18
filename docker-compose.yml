@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   titan:
-    image: titan:latest
+    image: ghcr.io/ianfigueroa/titan:latest
     ports:
       - "9001:9001"
     restart: unless-stopped
