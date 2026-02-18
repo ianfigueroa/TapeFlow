@@ -25,8 +25,8 @@ interface OIMonitorProps {
   compact?: boolean;
 }
 
-// Binance Futures API base URL
-const FUTURES_API_BASE = 'https://fapi.binance.com/fapi/v1';
+// Backend proxy for Binance Futures API (avoids CORS issues)
+const FUTURES_API_BASE = '/api/binance';
 
 // Polling interval (5 seconds as specified)
 const POLL_INTERVAL_MS = 5000;
