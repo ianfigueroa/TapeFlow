@@ -362,6 +362,45 @@ cd ../backend
 npm run build
 ```
 
+### Docker Deployment
+
+Run the full stack with Docker Compose:
+
+```bash
+# Build and start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+Or build services individually:
+
+```bash
+# Backend only
+docker build -t tapeflow-backend ./backend
+docker run -p 3001:3001 tapeflow-backend
+
+# Frontend only
+docker build -t tapeflow-frontend ./frontend
+docker run -p 80:80 tapeflow-frontend
+```
+
+The Docker setup includes:
+- **Backend**: Node.js server with health checks
+- **Frontend**: Nginx serving static files with API proxy
+- **Titan** (optional): C++ market data engine
+
+### Binance API Proxy
+
+The backend proxies Binance Futures API requests to avoid CORS issues:
+- `/api/binance/openInterest` - Open interest data
+- `/api/binance/longShortRatio` - Long/short account ratio
+- `/api/binance/premiumIndex` - Mark price and funding rate
+
 ## Stack
 
 - **Frontend**: React 18, TypeScript, Vite, Zustand, TailwindCSS
