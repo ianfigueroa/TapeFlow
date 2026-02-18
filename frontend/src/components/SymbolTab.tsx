@@ -67,11 +67,21 @@ export function SymbolTab({
   const displayPrice = (hasReceivedTickerRef.current ? tickerData.lastPrice : fallbackPrice) ?? 0;
   const displayChangePercent = (hasReceivedTickerRef.current ? tickerData.priceChangePercent : fallbackChangePercent) ?? 0;
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
       className={cn(
-        "group flex items-center gap-2 px-3 py-1.5 rounded border transition-all font-mono text-sm",
+        "group flex items-center gap-2 px-3 py-1.5 rounded border transition-all font-mono text-sm cursor-pointer",
         isActive
           ? "bg-black border-[#00FF41] text-[#00FF41]"
           : "bg-black border-gray-800 text-gray-500 hover:text-gray-300 hover:border-gray-700"
@@ -105,6 +115,6 @@ export function SymbolTab({
       >
         <PopoutIcon />
       </button>
-    </button>
+    </div>
   );
 }
