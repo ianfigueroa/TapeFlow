@@ -392,7 +392,26 @@ docker run -p 80:80 tapeflow-frontend
 The Docker setup includes:
 - **Backend**: Node.js server with health checks
 - **Frontend**: Nginx serving static files with API proxy
-- **Titan** (optional): C++ market data engine
+- **Titan**: C++ market data engine for VWAP, order book imbalance, and whale alerts
+
+### Titan Integration
+
+TapeFlow uses [Titan.cpp](https://github.com/ianfigueroa/Titan) for high-performance market analytics. The Docker Compose setup automatically pulls the Titan image from GitHub Container Registry.
+
+To run Titan separately:
+```bash
+# Using Docker
+docker pull ghcr.io/ianfigueroa/titan:latest
+docker run -p 9001:9001 ghcr.io/ianfigueroa/titan
+
+# Or download binary from releases
+# https://github.com/ianfigueroa/Titan/releases
+```
+
+Titan provides:
+- Real-time VWAP with fixed-point precision
+- Order book imbalance calculation
+- Sigma-based whale trade alerts
 
 ### Binance API Proxy
 
