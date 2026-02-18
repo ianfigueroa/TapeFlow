@@ -12,7 +12,10 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+  server,
+  maxPayload: 16 * 1024, // 16KB max message size
+});
 
 // Allow requests from the Vite dev server
 app.use(cors({
@@ -373,49 +376,115 @@ app.get('/api/news-stats', (req, res) => {
 // These proxy requests to avoid CORS issues when fetching from the frontend
 const BINANCE_FUTURES_API = 'https://fapi.binance.com/fapi/v1';
 
+// Input validation for Binance API proxy
+const SYMBOL_REGEX = /^[A-Z0-9]{2,20}$/;
+const VALID_PERIODS = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d'];
+const MAX_LIMIT = 500;
+
+function validateSymbol(symbol: unknown): string | null {
+  if (typeof symbol !== 'string') return null;
+  const upper = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return SYMBOL_REGEX.test(upper) ? upper : null;
+}
+
+// Simple in-memory rate limiter for Binance proxy endpoints
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000;
+const RATE_LIMIT_MAX_REQUESTS = 30;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
 app.get('/api/binance/openInterest', async (req, res) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
   try {
-    const symbol = req.query.symbol as string;
+    const symbol = validateSymbol(req.query.symbol);
     if (!symbol) {
-      return res.status(400).json({ error: 'Symbol is required' });
+      return res.status(400).json({ error: 'Invalid symbol format' });
     }
-    const response = await fetch(`${BINANCE_FUTURES_API}/openInterest?symbol=${symbol}`);
+
+    const url = new URL(`${BINANCE_FUTURES_API}/openInterest`);
+    url.searchParams.set('symbol', symbol);
+
+    const response = await fetch(url.toString());
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch open interest' });
+    console.error('[Binance Proxy] openInterest error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch open interest' });
   }
 });
 
 app.get('/api/binance/longShortRatio', async (req, res) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
   try {
-    const symbol = req.query.symbol as string;
-    const period = req.query.period as string || '5m';
-    const limit = req.query.limit as string || '1';
+    const symbol = validateSymbol(req.query.symbol);
     if (!symbol) {
-      return res.status(400).json({ error: 'Symbol is required' });
+      return res.status(400).json({ error: 'Invalid symbol format' });
     }
-    const response = await fetch(
-      `${BINANCE_FUTURES_API}/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=${limit}`
-    );
+
+    const period = VALID_PERIODS.includes(req.query.period as string)
+      ? req.query.period as string
+      : '5m';
+    const limitNum = Math.min(Math.max(1, parseInt(req.query.limit as string) || 1), MAX_LIMIT);
+
+    const url = new URL(`${BINANCE_FUTURES_API}/globalLongShortAccountRatio`);
+    url.searchParams.set('symbol', symbol);
+    url.searchParams.set('period', period);
+    url.searchParams.set('limit', String(limitNum));
+
+    const response = await fetch(url.toString());
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch long/short ratio' });
+    console.error('[Binance Proxy] longShortRatio error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch long/short ratio' });
   }
 });
 
 app.get('/api/binance/premiumIndex', async (req, res) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!checkRateLimit(clientIp)) {
+    return res.status(429).json({ error: 'Rate limit exceeded' });
+  }
+
   try {
-    const symbol = req.query.symbol as string;
+    const symbol = validateSymbol(req.query.symbol);
     if (!symbol) {
-      return res.status(400).json({ error: 'Symbol is required' });
+      return res.status(400).json({ error: 'Invalid symbol format' });
     }
-    const response = await fetch(`${BINANCE_FUTURES_API}/premiumIndex?symbol=${symbol}`);
+
+    const url = new URL(`${BINANCE_FUTURES_API}/premiumIndex`);
+    url.searchParams.set('symbol', symbol);
+
+    const response = await fetch(url.toString());
     const data = await response.json();
     res.json(data);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || 'Failed to fetch premium index' });
+    console.error('[Binance Proxy] premiumIndex error:', error.message);
+    res.status(500).json({ error: 'Failed to fetch premium index' });
   }
 });
 
