@@ -47,7 +47,7 @@ type MetricsCallback = (metrics: TitanMetrics) => void;
 type AlertCallback = (alert: TitanAlert) => void;
 type ConnectionCallback = (connected: boolean, error?: string) => void;
 
-const TITAN_WS_URL = 'ws://localhost:9001';
+const TITAN_WS_URL = import.meta.env.VITE_TITAN_WS_URL || 'ws://localhost:9001';
 const MAX_ALERTS = 100;
 const RECONNECT_DELAY_BASE = 1000;
 const MAX_RECONNECT_ATTEMPTS = 5;
