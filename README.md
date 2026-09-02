@@ -2,7 +2,7 @@
 
 ![TapeFlow v2](./docs/tapeflow_v2.png)
 
-Production-grade real-time trading terminal for order flow analysis. Designed for low-latency visualization of high-frequency cryptocurrency market data with professional-grade tooling for tape reading, footprint analysis, and paper trading.
+Real-time trading terminal for order flow analysis. Visualizes high-frequency cryptocurrency market data for tape reading, footprint analysis, and paper trading.
 
 ## Features
 
@@ -85,7 +85,7 @@ Components subscribe to the buffer and receive trades directly, avoiding React r
 
 ### Workspace Layout System
 
-TapeFlow uses flexlayout-react for a professional dockable workspace:
+TapeFlow uses flexlayout-react for a dockable workspace:
 
 - Drag tabs to dock panels anywhere (left, right, top, bottom, center)
 - Resize panels by dragging borders
