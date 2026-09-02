@@ -26,7 +26,7 @@ The engine runs three phases:
 
 ## Architecture
 
-- **Order Book**: Lock-free limit order book with O(1) best bid/ask
+- **Order Book**: Mutex-protected limit order book with O(1) best bid/ask
 - **Market Simulator**: Human-like stochastic load generator with trader personas
 - **WebSocket Server**: Telemetry broadcast on port 9001
 
