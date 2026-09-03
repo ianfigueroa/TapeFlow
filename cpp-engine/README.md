@@ -24,6 +24,28 @@ The engine runs three phases:
 2. Benchmark - 5-second high-frequency test targeting 1M orders/sec
 3. Telemetry Server - WebSocket server on ws://localhost:9001
 
+## Benchmarks
+
+The `hyperion` binary's phase 2 is **rate-limited** for a readable console feed
+(~1M orders/sec), so it is not a throughput measurement. For raw matching-engine
+throughput, run the standalone microbench, which drives `OrderBook` directly with
+no simulator and no sleeps:
+
+```bash
+cmake --build build --target bench_orderbook
+./build/bench_orderbook            # 10M ops per phase (default)
+```
+
+Measured on MinGW g++ 15.2 `-O3 -march=native`, run in isolation (concurrent load
+on the machine understates these by ~25%):
+
+| Workload | Throughput |
+| --- | --- |
+| Mixed (rest/match/cancel) | ~2.3 M ops/s |
+| Add-only (resting inserts) | ~4.2 M ops/s |
+
+The order book is **mutex-guarded**, not lock-free.
+
 ## Architecture
 
 - **Order Book**: Mutex-protected limit order book with O(1) best bid/ask
