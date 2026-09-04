@@ -10,7 +10,7 @@ frontend/.env
 
 # Build outputs
 dist/
-build/
+build*/
 
 # IDE
 .vscode/
@@ -41,3 +41,4 @@ coverage/
 .notes
 .prep
 
+# Personal notes
