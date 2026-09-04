@@ -1,6 +1,6 @@
 # TapeFlow Architecture Documentation
 
-A comprehensive guide to the TapeFlow HFT crypto dashboard—every component, data flow, and trading term explained.
+A comprehensive guide to the TapeFlow HFT crypto dashboard - every component, data flow, and trading term explained.
 
 ---
 

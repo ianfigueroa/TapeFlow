@@ -2,482 +2,128 @@
 
 ![TapeFlow v2](./docs/tapeflow_v2.png)
 
-Real-time trading terminal for order flow analysis. Visualizes high-frequency cryptocurrency market data for tape reading, footprint analysis, and paper trading.
+A trading terminal for reading order flow on crypto markets. It shows the tape, footprint charts, a DOM ladder, CVD, volume profile, open interest and liquidations, flags whale trades and spoofing, and lets you paper trade against live prices. It can run against live Binance data or against a local C++ matching engine that simulates a market, and the UI does not care which one it is talking to.
 
-## Features
+I built it because the tools I wanted to learn tape reading on were either paid or ran on a single symbol. This runs in a browser on anything.
 
-- Real-time Time and Sales tape with whale trade highlighting
-- Footprint charts with volume heatmap coloring
-- DOM Ladder with price level imbalance detection
-- Cumulative Volume Delta (CVD) overlay
-- Volume Profile with Point of Control
-- Open Interest monitoring with delta tracking
-- Liquidation heatmap visualization
-- Algorithmic signal detection (whale trades, velocity surges, spoofing, walls)
-- Sound alerts and desktop notifications
-- Paper trading with realistic slippage simulation
-- Session analytics (VWAP, session high/low, delta stats)
-- Fully customizable dockable workspace layout
-- Multiple color themes (Matrix, Bloomberg, Tradovate)
+## What is in it
 
-## Architecture
+- Time and Sales tape with whale trade highlighting
+- Footprint charts with a volume heatmap
+- DOM ladder with bid/ask imbalance detection
+- Cumulative volume delta overlay
+- Volume profile with point of control
+- Open interest and liquidation views
+- Signal detection for whale trades, velocity surges, spoofing and walls
+- Sound and desktop alerts with cooldowns
+- Paper trading with slippage, fees, stop loss, take profit, position and daily loss limits
+- Session stats (VWAP, high/low, delta)
+- Dockable layout you can rearrange and save
+- A few color themes
 
-### Data Flow
+## How it is put together
 
 ```
-Binance WebSocket (500+ msg/sec)
+Binance WebSocket
     |
     v
-Node.js Proxy Server (port 3001)
-    |
-    +---> Trade stream normalization
-    +---> Order book aggregation
-    +---> Open interest tracking
-    +---> Liquidation feed
-    |
+backend/  Node proxy on :3001
+    |     normalizes trades, aggregates the book, tracks OI and liquidations
     v
-React Application
+frontend/ React on :5173
     |
-    +---> dataBuffer.ts (mutable ring buffer)
-    |         - Stores last 5000 trades per symbol
-    |         - Subscriber pattern for components
-    |         - O(1) append, bounded memory
-    |
-    +---> Component Layer
-              |
-              +---> TapeTable (virtualized, @tanstack/react-virtual)
-              +---> FootprintChart (canvas, heatmap coloring)
-              +---> ChartPanel (TradingView lightweight-charts)
-              +---> OrderBook (100ms throttled updates)
-              +---> DOMLadder (bid/ask imbalance)
-              +---> CVDOverlay (cumulative delta chart)
-              +---> VolumeProfile (volume at price)
-              +---> OIMonitor (open interest delta)
-              +---> LiquidationHeatmap (liquidation clustering)
-              +---> AlgoSignals (whale/velocity/spoof detection)
-              +---> ExecutionPanel (paper trading interface)
-              +---> SessionStats (VWAP, session metrics)
+    +-- services/dataBuffer.ts   ring buffer, last 5000 trades per symbol, subscriber callbacks
+    +-- components/              TapeTable, FootprintChart, DOMLadder, CVDOverlay, VolumeProfile,
+    |                            OIMonitor, LiquidationHeatmap, AlgoSignals, ExecutionPanel, SessionStats
+    +-- paper/                   PaperTradingEngine + risk checks
+    +-- engine/                  canvas layers driven by one requestAnimationFrame loop
+    +-- analytics/               OPS, CVD, spread, OBI, iceberg and liquidity-zone calculators
 ```
 
-### Mutable Buffer Architecture
+Trades go into a mutable ring buffer and components subscribe to it directly. At a few hundred trades per second, pushing every trade through React state made the UI stutter, so the hot path skips React entirely and only the canvas layers redraw.
 
-At 500+ trades per second, immutable state updates cause severe performance degradation. TapeFlow uses mutable ring buffers with a subscriber pattern:
+Everything in `analytics/` is plain TypeScript with no React imports, so the calculators are easy to test on their own.
 
-```typescript
-// dataBuffer.ts - Core pattern
-const tradeBuffer = new Map<string, Trade[]>();
+### Signals
 
-export function appendTrade(trade: Trade) {
-  const buffer = tradeBuffer.get(trade.symbol) || [];
-  buffer.push(trade);
-  if (buffer.length > MAX_TRADES) buffer.shift();
-  tradeBuffer.set(trade.symbol, buffer);
-  notifySubscribers(trade);
-}
+| Signal | How it is detected | Default threshold |
+| --- | --- | --- |
+| Whale trade | single trade notional | > $50K (> $250K on BTC) |
+| Velocity surge | trades/sec vs the 30s average | > 300% |
+| Wall | large resting size at one level | > $100K |
+| Spoof | large order pulled before it fills | > $50K removed |
+| Imbalance | bid/ask size ratio at a level | > 3:1 |
 
-export function subscribeToTrades(callback: (trade: Trade) => void) {
-  subscribers.add(callback);
-  return () => subscribers.delete(callback);
-}
-```
+### Paper trading
 
-Components subscribe to the buffer and receive trades directly, avoiding React re-render overhead.
+Market and limit orders, long/short positions, average entry, realized and unrealized P&L. Fills are simulated against the real L1 with configurable slippage and fees. Risk checks reject orders that would break the max order size, max position size, max open positions or daily loss limit, and positions can carry a stop loss and take profit.
 
-### Workspace Layout System
+## Running it
 
-TapeFlow uses flexlayout-react for a dockable workspace:
-
-- Drag tabs to dock panels anywhere (left, right, top, bottom, center)
-- Resize panels by dragging borders
-- Save and load custom layouts
-- Layout presets for different trading styles
-- Layout persistence across sessions via localStorage
-
-Layout version tracking ensures users get updated default layouts when new panels are added.
-
-### Alert System
-
-The AlertManager provides centralized sound and notification handling:
-
-```typescript
-// AlertManager.ts
-class AlertManager {
-  // Web Audio API for sound generation (no external files)
-  playSound(type: AlertType): void;
-
-  // Browser Notification API for desktop alerts
-  showDesktopNotification(title: string, body: string): void;
-
-  // Combined alert with cooldown tracking
-  triggerAlert(title: string, message: string, type: AlertType): void;
-}
-```
-
-Alert types with distinct audio signatures:
-
-- Whale trade: Deep 600Hz tone
-- Price break: Sharp 1200Hz chirp
-- Velocity surge: Medium 900Hz tone
-- Wall detection: Low 400Hz rumble
-- Spoof detection: Quick 1500Hz chirp
-
-Configurable via Settings Panel:
-
-- Enable/disable sound alerts
-- Enable/disable desktop notifications
-- Adjustable cooldown period (1-300 seconds)
-
-### Algo Signal Detection
-
-AlgoSignals component monitors for trading patterns in real-time:
-
-| Signal          | Detection Method                    | Threshold              |
-| --------------- | ----------------------------------- | ---------------------- |
-| Whale Trade     | Single trade value                  | >$50K (>$250K for BTC) |
-| Velocity Surge  | Trades per second vs 30s average    | >300% spike            |
-| Wall Detection  | Large resting orders at price level | >$100K unfilled        |
-| Spoof Detection | Orders that disappear before fill   | >$50K removed          |
-| Imbalance       | Bid/ask volume ratio at level       | >3:1 ratio             |
-
-### Paper Trading Engine
-
-ExecutionPanel provides simulated order execution:
-
-```
-PaperTradingStore
-    |
-    +---> Order Entry
-    |         - Market orders (instant fill at current price)
-    |         - Limit orders (fill when price crosses)
-    |         - Order size in USD or contracts
-    |
-    +---> Position Management
-    |         - Long/short position tracking
-    |         - Average entry price calculation
-    |         - Real-time P&L (unrealized + realized)
-    |
-    +---> Risk Controls
-    |         - Max position size limits
-    |         - Stop loss percentage
-    |         - Daily loss limits
-    |
-    +---> Execution Simulation
-              - Configurable slippage (basis points)
-              - Trading fee simulation
-              - Fill against real L1 data
-```
-
-### Session Analytics
-
-SessionStats component tracks intraday metrics:
-
-- Session OHLC (open, high, low, current)
-- VWAP (Volume Weighted Average Price)
-- Session delta (buy volume - sell volume)
-- Total session volume
-- Price change from session open
-
-### Canvas Rendering Engine
-
-Single requestAnimationFrame loop drives all canvas layers:
-
-```
-LayerManager (60fps RAF)
-    |
-    +---> BackgroundLayer (z:0)   - Grid, axis
-    +---> HeatmapLayer (z:10)     - Order book depth, log10 scaling
-    +---> FootprintLayer (z:20)   - Cluster charts with heatmap coloring
-    +---> IndicatorLayer (z:30)   - VWAP, liquidity zones
-    +---> OverlayLayer (z:40)     - Crosshair, tooltips
-```
-
-Footprint heatmap coloring uses volume intensity:
-
-```typescript
-const intensity = Math.min(volume / globalMaxVolume, 1);
-
-// Color gradient: dark blue -> cyan -> yellow -> white
-const getHeatmapColor = (intensity: number): string => {
-  if (intensity < 0.25)
-    return `rgba(0, ${Math.floor(intensity * 4 * 200)}, 255, 0.8)`;
-  if (intensity < 0.5)
-    return `rgba(0, 200, ${Math.floor(255 - (intensity - 0.25) * 4 * 200)}, 0.9)`;
-  if (intensity < 0.75)
-    return `rgba(${Math.floor((intensity - 0.5) * 4 * 255)}, 200, 0, 0.95)`;
-  return `rgba(255, ${Math.floor(200 + (intensity - 0.75) * 4 * 55)}, 0, 1.0)`;
-};
-```
-
-### Analytics Calculators
-
-Calculators operate on raw data with no React dependencies:
-
-| Calculator            | Purpose                 | Method                       |
-| --------------------- | ----------------------- | ---------------------------- |
-| OPSCalculator         | Orders per second       | Binary search sliding window |
-| CVDCalculator         | Cumulative volume delta | Time-bucketed aggregation    |
-| SpreadAnalyzer        | Bid-ask spread stats    | 60-sample circular buffer    |
-| OBICalculator         | Order book imbalance    | Top 10 levels weighted       |
-| IcebergDetector       | Hidden order detection  | Refill pattern tracking      |
-| LiquidityZoneDetector | Support/resistance      | Persistent large orders      |
-
-## Directory Structure
-
-```
-TapeFlow/
-|
-+-- backend/                 # Node.js WebSocket proxy
-|   +-- server.ts           # Express + WS server (port 3001)
-|   +-- types.ts            # Shared type definitions
-|   +-- adapters/           # Exchange adapters
-|       +-- binance.ts      # Binance spot + futures
-|       +-- newsAdapter.ts  # News feed integration
-|
-+-- frontend/               # React + Vite application
-|   +-- src/
-|       +-- components/     # UI components
-|       |   +-- TapeTable.tsx
-|       |   +-- FootprintChart.tsx
-|       |   +-- ChartPanel.tsx
-|       |   +-- OrderBook.tsx
-|       |   +-- DOMLadder.tsx
-|       |   +-- CVDOverlay.tsx
-|       |   +-- VolumeProfile.tsx
-|       |   +-- OIMonitor.tsx
-|       |   +-- LiquidationHeatmap.tsx
-|       |   +-- AlgoSignals.tsx
-|       |   +-- ExecutionPanel.tsx
-|       |   +-- SessionStats.tsx
-|       |   +-- TapeFlowWorkspace.tsx
-|       |   +-- SettingsPanel.tsx
-|       |   +-- DashboardLayout.tsx
-|       |
-|       +-- stores/         # Zustand state management
-|       |   +-- useMarketStore.ts
-|       |   +-- useSettingsStore.ts
-|       |   +-- usePaperTradingStore.ts
-|       |
-|       +-- services/       # Data layer
-|       |   +-- dataBuffer.ts
-|       |   +-- clock.ts
-|       |
-|       +-- utils/          # Utilities
-|       |   +-- AlertManager.ts
-|       |   +-- formatters.ts
-|       |
-|       +-- analytics/      # Calculators
-|       +-- engine/         # Canvas rendering
-|       +-- alerts/         # Alert conditions
-|       +-- types/          # TypeScript definitions
-|
-+-- cpp-engine/             # C++ Hyperion simulation (optional)
-|   +-- include/
-|   +-- src/
-|   +-- CMakeLists.txt
-|
-+-- docs/
-    +-- ARCHITECTURE.md     # Detailed architecture docs
-```
-
-## Configuration
-
-### Settings Panel
-
-Access via the gear icon in the header. Tabs include:
-
-- **Colors**: Customize buy/sell colors, accent colors, theme presets
-- **Display**: Toggle components, adjust update rates
-- **Trading**: Paper trading parameters (slippage, fees, position limits)
-- **Alerts**: Sound and notification preferences
-- **Hotkeys**: Keyboard shortcut reference
-- **Profiles**: Save and load setting profiles
-
-### Keyboard Shortcuts
-
-| Key    | Action                             |
-| ------ | ---------------------------------- |
-| Space  | Pause/resume Time and Sales scroll |
-| S      | Focus symbol search                |
-| A      | Toggle alerts panel                |
-| ?      | Show keyboard shortcuts            |
-| R      | Reset/clear trades                 |
-| 1-9    | Switch to symbol tab               |
-| Ctrl+W | Close current tab                  |
-
-## Performance
-
-| Metric           | Target   | Achieved |
-| ---------------- | -------- | -------- |
-| Trade throughput | 500+/sec | 800+/sec |
-| Render rate      | 60fps    | 60fps    |
-| Input latency    | <16ms    | <10ms    |
-| Memory (heap)    | <100MB   | ~80MB    |
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Installation
+You need Node 18+.
 
 ```bash
-# Clone the repository
 git clone https://github.com/ianfigueroa/TapeFlow.git
 cd TapeFlow
 
-# Install backend dependencies
-cd backend
-npm install
-
-# Install frontend dependencies
-cd ../frontend
-npm install
+cd backend && npm install && npm run dev      # terminal 1
+cd frontend && npm install && npm run dev     # terminal 2
 ```
 
-### Running
+Open http://localhost:5173.
 
-```bash
-# Terminal 1: Start backend server
-cd backend
-npm run dev
+`npm run build` in either folder produces a production build. `docker-compose up -d` runs the backend, an nginx-served frontend and Titan together.
 
-# Terminal 2: Start frontend dev server
-cd frontend
-npm run dev
-```
+### Titan
 
-Open http://localhost:5173 in your browser.
+The backend can pull VWAP, book imbalance and whale alerts from [Titan](https://github.com/ianfigueroa/Titan), a C++ market data engine, instead of computing them in JavaScript. Set `TITAN_WS_URL=ws://titan:9001` (or run `docker pull ghcr.io/ianfigueroa/titan:latest`). The header shows "Titan Connected" when it is up; if it is not, TapeFlow falls back to its own calculators.
 
-### Building for Production
+### Backend proxy routes
 
-```bash
-# Build frontend
-cd frontend
-npm run build
+The backend proxies a few Binance Futures REST calls so the browser does not hit CORS:
 
-# Build backend
-cd ../backend
-npm run build
-```
+- `/api/binance/openInterest`
+- `/api/binance/longShortRatio`
+- `/api/binance/premiumIndex`
 
-### Docker Deployment
+## Keyboard
 
-Run the full stack with Docker Compose:
+| Key | Action |
+| --- | --- |
+| Space | pause/resume the tape |
+| S | focus symbol search |
+| A | toggle alerts panel |
+| ? | shortcut list |
+| R | clear trades |
+| 1-9 | switch symbol tab |
+| Ctrl+W | close tab |
 
-```bash
-# Build and start all services
-docker-compose up -d
+## The C++ engine (cpp-engine/)
 
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-Or build services individually:
-
-```bash
-# Backend only
-docker build -t tapeflow-backend ./backend
-docker run -p 3001:3001 tapeflow-backend
-
-# Frontend only
-docker build -t tapeflow-frontend ./frontend
-docker run -p 80:80 tapeflow-frontend
-```
-
-The Docker setup includes:
-- **Backend**: Node.js server with health checks
-- **Frontend**: Nginx serving static files with API proxy
-- **Titan**: C++ market data engine for VWAP, order book imbalance, and whale alerts
-
-### Titan Integration
-
-TapeFlow uses [Titan.cpp](https://github.com/ianfigueroa/Titan) for high-performance market analytics. The Docker Compose setup automatically pulls the Titan image from GitHub Container Registry.
-
-**Data Flow with Titan:**
-```
-Binance Futures API
-        │
-        ▼
-┌───────────────────┐
-│    Titan.cpp      │  (C++ engine on port 9001)
-│  • VWAP           │
-│  • Imbalance      │
-│  • Whale Alerts   │
-└─────────┬─────────┘
-          │ ws://localhost:9001
-          ▼
-┌───────────────────┐
-│  TapeFlow Backend │  (Node.js on port 3001)
-│  • Merges Titan   │
-│    metrics with   │
-│    Binance data   │
-└─────────┬─────────┘
-          │
-          ▼
-┌───────────────────┐
-│ TapeFlow Frontend │  (React on port 5173)
-└───────────────────┘
-```
-
-**Running Titan manually:**
-```bash
-# Using Docker
-docker pull ghcr.io/ianfigueroa/titan:latest
-docker run -p 9001:9001 ghcr.io/ianfigueroa/titan
-
-# Or download binary from releases
-# https://github.com/ianfigueroa/Titan/releases
-```
-
-**Titan provides:**
-- Real-time VWAP with fixed-point precision
-- Order book imbalance calculation
-- Sigma-based whale trade alerts (default: 2σ threshold)
-- Spread in basis points
-
-**Connection status:**
-TapeFlow shows "Titan Connected" in the header when connected. If Titan is unavailable, TapeFlow falls back to its own analytics calculations.
-
-**Configuration:**
-Set the Titan URL via environment variable:
-```bash
-TITAN_WS_URL=ws://titan:9001 npm run dev
-```
-
-### Binance API Proxy
-
-The backend proxies Binance Futures API requests to avoid CORS issues:
-- `/api/binance/openInterest` - Open interest data
-- `/api/binance/longShortRatio` - Long/short account ratio
-- `/api/binance/premiumIndex` - Mark price and funding rate
-
-## Stack
-
-- **Frontend**: React 18, TypeScript, Vite, Zustand, TailwindCSS
-- **Backend**: Node.js, Express, WebSocket (ws)
-- **Charts**: TradingView lightweight-charts, Canvas API
-- **Virtualization**: @tanstack/react-virtual
-- **Layout**: flexlayout-react
-- **Data**: Binance Spot and Futures WebSocket streams
-
-## Optional: Hyperion Engine
-
-The cpp-engine directory contains an optional C++ market simulator for testing:
+`cpp-engine/` is a small matching engine plus a market simulator that TapeFlow can use instead of a live feed. The order book is price-time priority and is guarded by a mutex (it is not lock-free). The simulator drives it with an Ornstein-Uhlenbeck price process and a mix of trader types, and there is a header-only RFC 6455 WebSocket server (hand-written SHA-1 and Base64 for the handshake, no dependencies) that streams book telemetry to the frontend.
 
 ```bash
 cd cpp-engine
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
-./Release/hyperion.exe
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+./build/hyperion            # demo, then the built-in 1M orders/sec simulator benchmark, then the telemetry server
 ```
 
-See cpp-engine/README.md for details on the simulation parameters.
+The built-in benchmark is paced by the simulator and tops out around 1M orders/sec by design. To measure the order book itself:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHYPERION_BUILD_BENCHMARKS=ON
+cmake --build build --target bench_orderbook
+./build/bench_orderbook
+```
+
+On a Ryzen 9 8945HS with MinGW g++ 15 `-O3 -march=native`, run with nothing else on the machine, that gives roughly 2.1 to 2.3M mixed add/cancel/match ops per second and about 4.3M add-only inserts per second. Numbers move with the CPU and with whatever else is running; treat them as a ballpark, not a spec.
+
+See `cpp-engine/README.md` for the simulator parameters.
+
+## Stack
+
+React 18, TypeScript, Vite, Zustand, Tailwind, flexlayout-react, @tanstack/react-virtual, TradingView lightweight-charts, Node + Express + ws, C++20 for the engine.
 
 ## License
 

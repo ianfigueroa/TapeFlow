@@ -1,6 +1,6 @@
 # Hyperion Engine
 
-High-performance C++ simulation engine for TapeFlow.
+A small C++ matching engine and market simulator that TapeFlow can run against instead of a live exchange.
 
 ## Build Instructions
 
@@ -36,7 +36,7 @@ cmake --build build --target bench_orderbook
 ./build/bench_orderbook            # 10M ops per phase (default)
 ```
 
-Measured on MinGW g++ 15.2 `-O3 -march=native`, run in isolation (concurrent load
+Measured on MinGW g++ 15.2 `-O3 -march=native` with nothing else running (other load
 on the machine understates these by ~25%):
 
 | Workload | Throughput |
@@ -49,7 +49,7 @@ The order book is **mutex-guarded**, not lock-free.
 ## Architecture
 
 - **Order Book**: Mutex-protected limit order book with O(1) best bid/ask
-- **Market Simulator**: Human-like stochastic load generator with trader personas
+- **Market Simulator**: stochastic order flow from a handful of trader types
 - **WebSocket Server**: Telemetry broadcast on port 9001
 
 ## Market Simulator

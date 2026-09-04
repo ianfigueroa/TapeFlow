@@ -18,7 +18,7 @@
 
 using namespace hyperion;
 
-// xorshift64 — cheap, deterministic PRNG so runs are reproducible.
+// xorshift64 - cheap, deterministic PRNG so runs are reproducible.
 static inline std::uint64_t next_rand(std::uint64_t& s) {
     s ^= s << 13;
     s ^= s >> 7;
@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
                                        : 10'000'000ULL;
     const double mid = 30000.0;
 
-    // Phase A: mixed workload — 35% rest bid, 35% rest ask, 15% marketable, 15% cancel.
+    // Phase A: mixed workload - 35% rest bid, 35% rest ask, 15% marketable, 15% cancel.
     {
         OrderBook book("BTCUSDT");
         std::vector<std::uint64_t> live;
@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(book.getTradeCount()));
     }
 
-    // Phase B: add-only peak — non-crossing resting inserts, no matching/cancels.
+    // Phase B: add-only peak - non-crossing resting inserts, no matching/cancels.
     {
         OrderBook book("BTCUSDT");
         std::uint64_t s = 0x1234567890ABCDEFULL;
