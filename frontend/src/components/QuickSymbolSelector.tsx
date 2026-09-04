@@ -1,11 +1,5 @@
 /**
- * QuickSymbolSelector - Inline searchable symbol dropdown for header
- * 
- * Features:
- * - Click to expand dropdown
- * - Type to filter symbols
- * - Show popular symbols at top
- * - Quick switch between instruments
+ * Searchable symbol dropdown in the header, popular symbols first.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';

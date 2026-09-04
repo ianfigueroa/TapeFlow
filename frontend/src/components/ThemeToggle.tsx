@@ -1,6 +1,5 @@
 /**
- * ThemeToggle - Toggle between Hacker and Pro themes
- * Displays a terminal/matrix icon for hacker mode and a professional icon for pro mode
+ * Switches between the Hacker and Pro themes.
  */
 
 import { useTheme } from '../hooks/useTheme';
@@ -17,7 +16,7 @@ const HackerIcon = () => (
   </svg>
 );
 
-// Briefcase/Professional icon for Pro theme
+// Briefcase icon for Pro theme
 const ProIcon = () => (
   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
     <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />

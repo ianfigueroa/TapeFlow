@@ -1,8 +1,6 @@
 /**
- * ImbalanceMeter - Visual bar showing bid/ask liquidity ratio for top N levels
- * 
- * Professional quant tool showing real-time order book imbalance.
- * Now subscribes directly to dataBuffer for live updates independent of parent.
+ * Bid/ask liquidity ratio for the top N levels.
+ * Subscribes to dataBuffer directly so it updates without the parent re-rendering.
  */
 
 import { useMemo, memo, useState, useEffect, useRef } from 'react';

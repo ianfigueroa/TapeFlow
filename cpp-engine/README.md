@@ -1,6 +1,6 @@
 # Hyperion Engine
 
-High-performance C++ simulation engine for TapeFlow.
+A small C++ matching engine and market simulator that TapeFlow can run against instead of a live exchange.
 
 ## Build Instructions
 
@@ -36,25 +36,25 @@ cmake --build build --target bench_orderbook
 ./build/bench_orderbook            # 10M ops per phase (default)
 ```
 
-Measured on MinGW g++ 15.2 `-O3 -march=native`, run in isolation (concurrent load
+Measured on MinGW g++ 15.2 `-O3 -march=native` with nothing else running (other load
 on the machine understates these by ~25%):
 
 | Workload | Throughput |
 | --- | --- |
-| Mixed (rest/match/cancel) | ~2.3 M ops/s |
-| Add-only (resting inserts) | ~4.2 M ops/s |
+| Mixed (rest/match/cancel) | ~2.1-2.3 M ops/s |
+| Add-only (resting inserts) | ~4.3 M ops/s |
 
 The order book is **mutex-guarded**, not lock-free.
 
 ## Architecture
 
 - **Order Book**: Mutex-protected limit order book with O(1) best bid/ask
-- **Market Simulator**: Human-like stochastic load generator with trader personas
+- **Market Simulator**: stochastic order flow from a handful of trader types
 - **WebSocket Server**: Telemetry broadcast on port 9001
 
 ## Market Simulator
 
-The simulator generates realistic market activity by modeling five distinct trader personas:
+The simulator generates order flow from five trader types:
 
 ### Trader Types
 
@@ -68,7 +68,7 @@ The simulator generates realistic market activity by modeling five distinct trad
 
 ### Price Dynamics
 
-The simulator uses an Ornstein-Uhlenbeck process for realistic price evolution:
+The price follows an Ornstein-Uhlenbeck process:
 
 - **Mean Reversion**: Prices gravitate back toward a base price
 - **Volatility**: Adaptive realized volatility calculation from recent history
@@ -77,10 +77,10 @@ The simulator uses an Ornstein-Uhlenbeck process for realistic price evolution:
 
 ### Order Flow Features
 
-- **Order Cancellations**: Approximately 15% of orders are cancelled (realistic behavior)
+- **Order Cancellations**: About 15% of orders are cancelled
 - **Buy/Sell Pressure**: Tracks consecutive directional orders
 - **Momentum Feedback**: Order flow imbalance influences price direction
-- **Price Bounds**: Prices clamped to +/-10% from base to prevent unrealistic swings
+- **Price Bounds**: Prices clamped to +/-10% from base so the price cannot run away
 
 ### Statistics Tracked
 

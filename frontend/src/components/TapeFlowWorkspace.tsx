@@ -1,13 +1,6 @@
 /**
- * TapeFlowWorkspace - Professional dockable workspace using flexlayout-react
- * 
- * Tradovate-style drag-and-drop panel system where users can:
- * - Drag tabs to any edge or center to dock
- * - Resize panels by dragging borders
- * - Float panels into separate windows (popout)
- * - Save/load custom layouts
- * 
- * This replaces the static CSS grid TradingDashboard with a fully customizable workspace.
+ * Dockable workspace built on flexlayout-react.
+ * Panels can be docked, resized, popped out, and saved/loaded as named layouts.
  */
 
 import { useCallback, useRef, useEffect, useState } from 'react';
@@ -646,14 +639,14 @@ export function TapeFlowWorkspace({ symbolData, pauseScroll }: TapeFlowWorkspace
             onClick={() => setShowSaveDialog(true)}
             className="px-2 py-0.5 text-xs font-mono rounded transition-colors tf-button text-green-400 hover:bg-green-900/30"
           >
-            💾 Save
+            Save
           </button>
           <button
             onClick={() => setShowLoadDialog(true)}
             className="px-2 py-0.5 text-xs font-mono rounded transition-colors tf-button text-blue-400 hover:bg-blue-900/30"
             disabled={savedLayouts.length === 0}
           >
-            📂 Load ({savedLayouts.length})
+            Load ({savedLayouts.length})
           </button>
           <button
             onClick={resetToFactory}
@@ -702,7 +695,7 @@ export function TapeFlowWorkspace({ symbolData, pauseScroll }: TapeFlowWorkspace
       {showSaveDialog && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 w-80">
-            <h3 className="text-sm font-mono text-green-400 mb-3">💾 Save Layout</h3>
+            <h3 className="text-sm font-mono text-green-400 mb-3">Save Layout</h3>
             <input
               type="text"
               value={newLayoutName}
@@ -735,7 +728,7 @@ export function TapeFlowWorkspace({ symbolData, pauseScroll }: TapeFlowWorkspace
       {showLoadDialog && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 w-96 max-h-[400px] overflow-hidden flex flex-col">
-            <h3 className="text-sm font-mono text-blue-400 mb-3">📂 Load Layout</h3>
+            <h3 className="text-sm font-mono text-blue-400 mb-3">Load Layout</h3>
             <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
               {savedLayouts.length === 0 ? (
                 <p className="text-gray-500 text-sm font-mono text-center py-4">No saved layouts</p>
@@ -760,7 +753,7 @@ export function TapeFlowWorkspace({ symbolData, pauseScroll }: TapeFlowWorkspace
                         className="px-2 py-1 text-xs font-mono rounded bg-yellow-600 hover:bg-yellow-500 text-black"
                         title="Set as default"
                       >
-                        ⭐
+                        Default
                       </button>
                       <button
                         onClick={() => deleteNamedLayout(layout.name)}

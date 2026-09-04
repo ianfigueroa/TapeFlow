@@ -1,8 +1,5 @@
 /**
- * HotkeysPanel - Keyboard Shortcuts Modal
- * 
- * Professional trading terminal keyboard shortcuts reference
- * Triggered by pressing "?" or "Shift+/"
+ * Keyboard shortcut list, opened with "?".
  */
 
 import { useEffect, memo } from 'react';

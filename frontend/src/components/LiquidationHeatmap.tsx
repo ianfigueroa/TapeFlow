@@ -1,19 +1,10 @@
 /**
- * LiquidationHeatmap - Visual representation of estimated liquidation levels
- * 
- * Shows high liquidity pools (estimated leverage liquidation zones)
- * above and below current price where large position liquidations
- * are likely clustered.
- * 
- * Features:
- * - Polls for data every 10 seconds (as specified)
- * - Falls back to estimation if no API data available
- * - Visual intensity based on estimated liquidity
- * - Separate zones for long and short liquidations
- * 
- * Note: True liquidation data requires exchange-specific APIs or
- * aggregated data from services like Coinglass. This component
- * estimates liquidation zones based on common leverage levels.
+ * Estimated liquidation zones above and below the current price.
+ *
+ * This is an estimate, not exchange data: it takes common leverage levels,
+ * computes where positions opened near the current price would be liquidated,
+ * and weights each zone by open interest and the long/short ratio.
+ * Real liquidation maps need aggregated data (e.g. Coinglass).
  */
 
 import { useState, useEffect, useMemo, memo, useRef, useCallback } from 'react';
@@ -30,13 +21,13 @@ interface LiquidationHeatmapProps {
   symbol: string;
   currentPrice: number;
   className?: string;
-  refreshIntervalMs?: number; // How often to poll (default 10s per spec)
+  refreshIntervalMs?: number; // default 10s
 }
 
 // Common leverage levels used in crypto trading
 const LEVERAGE_LEVELS = [5, 10, 25, 50, 100];
 
-// Polling interval (10 seconds as specified in requirements)
+// Polling interval
 const DEFAULT_REFRESH_INTERVAL_MS = 10000;
 
 // Backend proxy for Binance Futures API (avoids CORS issues)
@@ -168,7 +159,7 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
     return newLevels;
   }, []);
 
-  // Poll for data on interval (10 seconds as specified)
+  // Poll for data on an interval
   // NOTE: currentPrice is read from ref inside poll() to avoid restarting timer
   useEffect(() => {
     if (!symbol) {
@@ -226,7 +217,7 @@ export const LiquidationHeatmap = memo(function LiquidationHeatmap({
     // Initial poll immediately
     poll();
     
-    // Then poll every 10 seconds (as specified) - timer won't restart on price changes
+    // Then poll every 10 seconds - timer won't restart on price changes
     const intervalId = setInterval(poll, refreshIntervalMs);
     
     return () => {

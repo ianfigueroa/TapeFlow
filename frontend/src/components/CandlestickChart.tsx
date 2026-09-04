@@ -1,16 +1,6 @@
 /**
- * Real-time Candlestick Chart using Canvas rendering
- * 
- * Renders OHLC candles aggregated from incoming trades.
- * Green candles = close > open (bullish)
- * Red candles = close < open (bearish)
- * 
- * Features:
- * - Proper OHLC with wicks (high-low lines)
- * - Volume bars at bottom
- * - VWAP line overlay
- * - Responsive to container size
- * - Current price marker
+ * Candlestick chart drawn on canvas.
+ * Candles are built from incoming trades, with volume bars, a VWAP line and a current price marker.
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';

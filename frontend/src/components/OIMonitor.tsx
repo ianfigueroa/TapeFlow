@@ -1,13 +1,6 @@
 /**
- * OIMonitor - Enhanced real-time Open Interest display
- * 
- * Features:
- * - Current OI value with trend indicator
- * - 5-minute delta showing recent change
- * - Sparkline chart showing OI trend over last hour
- * - Color-coded sentiment
- * 
- * Polls Binance Futures API every 5 seconds for live OI data.
+ * Open interest with a 5-minute delta and a sparkline of the last hour.
+ * Polls the Binance Futures API every 5 seconds.
  */
 
 import { useState, useEffect, memo, useRef, useCallback } from 'react';
@@ -28,7 +21,7 @@ interface OIMonitorProps {
 // Backend proxy for Binance Futures API (avoids CORS issues)
 const FUTURES_API_BASE = '/api/binance';
 
-// Polling interval (5 seconds as specified)
+// Polling interval (5 seconds)
 const POLL_INTERVAL_MS = 5000;
 
 // Keep 1 hour of history (720 data points at 5 second intervals)

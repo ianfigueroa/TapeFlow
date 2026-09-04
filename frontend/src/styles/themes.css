@@ -1,6 +1,5 @@
 /**
- * TapeFlow Theme System
- * Professional trading terminal themes with CSS variables
+ * TapeFlow themes as CSS variables.
  */
 
 /* ============================================================================
@@ -82,7 +81,7 @@
   --tf-text-muted: #8b949e;
   --tf-text-disabled: #6e7681;
   
-  /* Trading Colors - Softer Professional */
+  /* Trading colors - softer */
   --tf-buy: #3fb950;
   --tf-buy-dim: #238636;
   --tf-buy-bg: rgba(63, 185, 80, 0.15);

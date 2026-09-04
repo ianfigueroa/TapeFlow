@@ -370,7 +370,7 @@ export function DashboardLayout() {
                 TAPEFLOW
               </h2>
               <p className="mb-4 font-mono text-sm" style={{ color: 'var(--tf-text-muted)' }}>
-                Professional crypto trading terminal
+                Order flow terminal for crypto
               </p>
               <button
                 onClick={() => setShowSymbolSelector(true)}

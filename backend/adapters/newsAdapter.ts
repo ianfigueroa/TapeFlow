@@ -1,14 +1,7 @@
 /**
- * NewsAdapter - Crypto news aggregation service
- * 
- * Fetches and caches cryptocurrency news from CryptoCompare API.
- * Provides REST endpoint and WebSocket broadcast for new articles.
- * 
- * Features:
- * - 5-minute cache to respect rate limits
- * - Symbol filtering (BTC, ETH, etc.)
- * - Basic sentiment classification from title keywords
- * - WebSocket broadcast for real-time updates
+ * Crypto news from the CryptoCompare API.
+ * Cached for 5 minutes, filtered by symbol, tagged with a keyword-based sentiment,
+ * and broadcast to clients over the WebSocket.
  */
 
 export interface NewsItem {

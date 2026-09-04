@@ -1,14 +1,7 @@
 /**
- * DOMLadder - Interactive Depth of Market Ladder
- * 
- * Professional-style DOM ladder showing:
- * - Order book depth at each price level
- * - Bid/Ask imbalance visualization
- * - Price ladder centered on current price
- * - Cumulative depth
- * - Large order highlighting
- * - ONE-CLICK ORDER ENTRY (click bid/ask columns to place orders)
- * - Working order highlighting
+ * DOM ladder: book depth per price level centered on the current price,
+ * with imbalance bars, cumulative depth and working orders.
+ * Clicking the bid/ask columns places a paper order.
  */
 
 import { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
