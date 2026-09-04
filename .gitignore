@@ -41,10 +41,6 @@ coverage/
 .notes
 .prep
 
-# Claude AI files - keep AI assistant files out of repo
-.claude/
-.claude
-**/CLAUDE.md
-CLAUDE.md
+# Personal notes
 **/DELETION_LOG.md
 DELETION_LOG.md
